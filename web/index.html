@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Image2Splat beta</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+
+<!-- ============================================================ header === -->
+<header>
+  <div class="brand">Image2<b>Splat</b></div>
+  <span id="buildTag">beta</span>
+
+  <nav class="wstabs" id="wsTabs">
+    <button id="tabAuthor" class="on" data-ws="author">Author</button>
+    <button id="tabPasses" data-ws="passes">Passes</button>
+  </nav>
+
+  <div class="projwrap" style="position:relative">
+    <select id="projList" title="the project folder on disk"></select>
+    <button id="btnNew" title="start a new project">New</button>
+    <button id="btnProjMenu" title="rename, clone, recover, export, import" aria-label="Project menu">&#8943;</button>
+    <div class="menu" id="projMenu">
+      <button id="btnRename">Rename&#8230;</button>
+      <button id="btnClone">Save as&#8230;</button>
+      <button id="btnRescan">Recover from files on disk</button>
+      <button id="btnExport">Export .zip</button>
+      <button id="btnImport">Import .zip&#8230;</button>
+      <button id="btnPrune">Delete empty projects</button>
+      <button id="btnFreeVram">Free VRAM</button>
+    </div>
+    <input type="file" id="importFile" accept=".zip" class="hidden">
+  </div>
+
+  <span class="spacer"></span>
+
+  <button class="envchip" id="envChip" title="fal key, Brush, and every configured path">Environment</button>
+
+  <div class="zoomrow">
+    <button id="zOut" title="smaller UI (browser zoom does not survive some RDP sessions)" aria-label="Smaller UI">&minus;</button>
+    <span id="zVal">100%</span>
+    <button id="zIn" title="larger UI" aria-label="Larger UI">+</button>
+    <button id="zRst" title="reset UI scale" aria-label="Reset UI scale">&#9679;</button>
+  </div>
+</header>
+
+<!-- ============================================================== main === -->
+<main>
+
+<!-- ============================================================= AUTHOR === -->
+<section class="workspace on" id="wsAuthorPane">
+  <div class="rail" id="railAuthor">
+
+    <!-- ---------------------------------------------------- 1 Source --- -->
+    <div class="step open" id="stepSource" data-step="1">
+      <div class="head" role="button" tabindex="0"><span class="num">1</span><span class="title">Source</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="drop" id="drop" role="button" tabindex="0" aria-label="Load the source photo">
+          <div class="dropimg"></div>
+          <div class="dropmsg">Drop a photo here, or click to choose</div>
+          <div class="dropbadge" aria-live="polite"></div>
+        </div>
+        <input type="file" id="file" accept="image/*" class="hidden">
+
+        <div class="status" id="stSource"><div class="cap">Source</div></div>
+
+        <div class="adv" data-adv="source">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <!-- MoGe-2 measures the lens automatically after every upload.
+                 This only runs it again. -->
+            <button id="btnFov" class="wide" title="MoGe-2 already measured the lens on upload. This measures it again.">Re-measure the lens (MoGe-2)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------- 2 Cloud --- -->
+    <div class="step" id="stepCloud" data-step="2">
+      <div class="head" role="button" tabindex="0"><span class="num">2</span><span class="title">Cloud</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="oPoints"><b>Point density</b><small>points across the photo</small></label>
+          <select id="oPoints">
+            <option value="480">480 &mdash; fast</option>
+            <option value="640">640</option>
+            <option value="900" selected>900 &mdash; dense (default)</option>
+            <option value="1280">1280 &mdash; very dense, slow</option>
+          </select></div>
+
+        <div class="f"><label for="oDepthStr"><b>Relief</b><small>world units of depth across the subject</small></label>
+          <div class="sliderrow"><input type="range" id="oDepthStr" min="0" max="400" step="5" value="150">
+            <span class="v" id="oDepthStrVal">1.50</span></div></div>
+
+        <div class="f"><label for="cPrune"><b>Isolated-point cleanup</b><small>removes stray points along depth edges</small></label>
+          <div class="sliderrow"><input type="range" id="cPrune" min="0" max="100" value="0">
+            <span class="v" id="cPruneVal">off</span></div></div>
+
+        <div class="f"><label for="cCut"><b>Depth cutoff</b><small>drops points behind the subject</small></label>
+          <div class="sliderrow"><input type="range" id="cCut" min="0" max="1000" value="0">
+            <span class="v" id="cCutVal">off</span></div></div>
+
+        <label class="chk"><input type="checkbox" id="cCropOn">
+          <span>Isolate a sphere &mdash; keep only the points inside it</span></label>
+        <div id="cropCtl" class="hidden">
+          <div class="row">
+            <button id="btnCropGizmo" style="flex:1">Place with the gizmo</button>
+            <button id="btnCropFit" style="flex:1">Centre on the subject</button>
+          </div>
+          <div class="f"><label for="cCropR"><b>Sphere radius</b><small>world units</small></label>
+            <input type="number" id="cCropR" step="0.1" value="2.5"></div>
+        </div>
+
+        <div class="status" id="stCloud"><div class="cap">Cloud</div></div>
+
+        <div class="adv" data-adv="cloud">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="f"><label><b>Depth model</b></label>
+              <div class="derived"><span class="v">MoGe-2 &mdash; metric</span>
+                <span class="from">the only model in this build</span></div>
+              <input type="hidden" id="oDepthModel" value="moge2"></div>
+            <label class="chk"><input type="checkbox" id="oCull" checked>
+              <span>Cull points seen from behind the shell</span></label>
+
+            <div class="lbl"><b>Isolate sphere centre</b><small>world units</small></div>
+            <div class="grid3">
+              <div class="f"><label for="cCropX"><b>x</b></label><input type="number" id="cCropX" step="0.1" value="0"></div>
+              <div class="f"><label for="cCropY"><b>y</b></label><input type="number" id="cCropY" step="0.1" value="0"></div>
+              <div class="f"><label for="cCropZ"><b>z</b></label><input type="number" id="cCropZ" step="0.1" value="2"></div>
+            </div>
+
+            <div class="lbl"><b>Subject translate</b><small>world units</small></div>
+            <div class="grid3">
+              <div class="f"><label for="sX"><b>x</b></label><input type="number" id="sX" step="0.05" value="0"></div>
+              <div class="f"><label for="sY"><b>y</b></label><input type="number" id="sY" step="0.05" value="0"></div>
+              <div class="f"><label for="sZ"><b>z</b></label><input type="number" id="sZ" step="0.05" value="0"></div>
+            </div>
+            <div class="lbl"><b>Subject rotate</b><small>degrees</small></div>
+            <div class="grid3">
+              <div class="f"><label for="sRotX"><b>about x</b></label><input type="number" id="sRotX" step="1" value="0"></div>
+              <div class="f"><label for="sRotY"><b>about y</b></label><input type="number" id="sRotY" step="1" value="0"></div>
+              <div class="f"><label for="sRot"><b>about z</b></label><input type="number" id="sRot" step="1" value="0"></div>
+            </div>
+          </div>
+        </div>
+
+        <button class="primary" id="btnCloud" title="Lifts the points again with the settings above">Regenerate</button>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------ 3 Shot --- -->
+    <div class="step" id="stepShot" data-step="3">
+      <div class="head" role="button" tabindex="0"><span class="num">3</span><span class="title">Shot</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="oDur"><b>Length</b><small>seconds</small></label>
+          <div class="sliderrow"><input type="range" id="oDur" min="1" max="15" step="1" value="5">
+            <span class="v" id="oDurVal">5s</span></div></div>
+
+        <!-- Paired sliders: the NUMBER BOX keeps the id and is typeable; the
+             range is a mirror that widens when a typed value is past its end. -->
+        <div class="f"><label for="oSweep"><b>Azimuth sweep</b><small>degrees travelled</small></label>
+          <div class="sliderrow"><input type="range" id="oSweep_r" class="mirror" min="10" max="360" step="5" value="360" aria-label="Azimuth sweep">
+            <input type="number" id="oSweep" class="vnum" step="5" value="360"></div></div>
+
+        <div class="f"><label for="oRad"><b>Radius</b><small>camera distance &middot; range follows the scene</small></label>
+          <div class="sliderrow"><input type="range" id="oRad_r" class="mirror" min="0.1" max="36" step="0.1" value="9" aria-label="Radius">
+            <input type="number" id="oRad" class="vnum" step="0.1" value="9"></div></div>
+
+        <div class="f"><label for="oAimZ"><b>Aim height</b><small>where the camera looks</small></label>
+          <div class="sliderrow"><input type="range" id="oAimZ_r" class="mirror" min="-5" max="10" step="0.05" value="2.3" aria-label="Aim height">
+            <input type="number" id="oAimZ" class="vnum" step="0.05" value="2.3"></div></div>
+
+        <div class="f"><label for="oFov"><b>Vertical FOV</b><small>degrees &middot; measured on upload</small></label>
+          <div class="sliderrow"><input type="range" id="oFov_r" class="mirror" min="10" max="120" step="0.5" value="42" aria-label="Vertical FOV">
+            <input type="number" id="oFov" class="vnum" step="0.5" value="42"></div>
+          <span class="help" id="fovMmHint"></span></div>
+
+        <div class="grid2 derivedpair">
+          <div class="f"><label><b>Canvas</b><small>matches the photo</small></label>
+            <div class="derived"><span class="v" id="canvasD">&mdash;</span></div></div>
+          <div class="f"><label><b>Elevation</b><small>front-on, locked</small></label>
+            <div class="derived"><span class="v">0&deg;</span></div></div>
+        </div>
+        <input type="hidden" id="oW" value="1024">
+        <input type="hidden" id="oH" value="1024">
+        <input type="hidden" id="oElev" value="0">
+        <input type="hidden" id="oPhase" value="0">
+
+        <div class="status" id="stShot"><div class="cap">Shot</div></div>
+
+        <div class="adv" data-adv="shot">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="f"><label for="oFps"><b>Playback fps</b><small>some engines force their own rate</small></label>
+              <input type="number" id="oFps" min="6" max="30" step="1" value="24"></div>
+
+            <div class="f"><label for="oPath"><b>Vertical spread</b><small>adds vertical parallax; frame 0 stays front-on</small></label>
+              <select id="oPath">
+                <option value="ring" selected>flat &mdash; one elevation</option>
+                <option value="ring-rock">rock &mdash; sweep up and down</option>
+                <option value="helix">helix &mdash; climb a band</option>
+              </select></div>
+
+            <div id="ringOpts" class="hidden">
+              <div class="f"><label for="oElevSweep"><b>Elevation amplitude</b><small>&plusmn; degrees</small></label>
+                <input type="number" id="oElevSweep" step="1" value="0"></div>
+            </div>
+            <div id="helixOpts" class="hidden">
+              <div class="grid3">
+                <div class="f"><label for="oHelixMin"><b>Band low z</b></label><input type="number" id="oHelixMin" step="0.1" value="0"></div>
+                <div class="f"><label for="oHelixMax"><b>Band high z</b></label><input type="number" id="oHelixMax" step="0.1" value="3"></div>
+                <div class="f"><label for="oHelixStart"><b>Start %</b></label><input type="number" id="oHelixStart" step="5" value="0"></div>
+              </div>
+            </div>
+            <div class="f"><label for="oElevCycles"><b id="cyclesLabel">Sweep cycles</b></label>
+              <input type="number" id="oElevCycles" step="0.5" value="1"></div>
+
+            <div class="f"><label for="oClay"><b>Look</b><small>what the control video shows</small></label>
+              <select id="oClay">
+                <option value="shaded" selected>flat clay &mdash; one neutral grey</option>
+                <option value="off">source colour</option>
+              </select></div>
+
+            <!-- The card is a FIXED OBJECT IN THE WORLD: a photograph
+                 unprojected at a physical size. Radius is the framing control.
+                 The checkbox only SEEDS this number on a new photo; Re-fit sets
+                 it by hand whenever frame 0 should reproduce the photo again. -->
+            <label class="chk"><input type="checkbox" id="oFit" checked>
+              <span>Fit the card to the photo when a new photo is uploaded</span></label>
+            <div class="f"><label for="oCard"><b>Card height</b><small>the photo's physical size in the world</small></label>
+              <input type="number" id="oCard" step="0.05" min="0.05" value="3.6">
+              <span class="help" id="oCardHint"></span></div>
+            <button id="btnFitCard" class="wide">Re-fit the card to the source photo</button>
+          </div>
+        </div>
+
+        <div class="softsec">
+          <label class="chk">
+            <input type="checkbox" id="gSoftOn" checked>
+            <span>Soften the control video before sending</span></label>
+          <div id="softBox">
+            <div class="grid2">
+              <div class="f"><label for="gSoftDown"><b>Downsample</b></label>
+                <div class="sliderrow"><input type="range" id="gSoftDown" min="1" max="4" step="1" value="2">
+                  <span class="v" id="gSoftDownV">2&times;</span></div></div>
+              <div class="f"><label for="gSoftBlur"><b>Blur</b><small>px</small></label>
+                <div class="sliderrow"><input type="range" id="gSoftBlur" min="0" max="12" value="0">
+                  <span class="v" id="gSoftBlurV">0</span></div></div>
+            </div>
+            <div class="status" id="stSoft"><div class="cap">Softened clip</div></div>
+          </div>
+        </div>
+
+        <button class="primary" id="btnOrbit">Render control video</button>
+      </div>
+    </div>
+
+    <!-- -------------------------------------------------- 4 Generate --- -->
+    <div class="step" id="stepGen" data-step="4">
+      <div class="head" role="button" tabindex="0"><span class="num">4</span><span class="title">Generate</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="gEngine"><b>Engine</b></label>
+          <select id="gEngine"></select></div>
+        <div class="status" id="stEngine"><div class="cap">Engine</div></div>
+
+        <div class="f"><label for="gPrompt"><b>Subject description</b><small>what the subject is, in the model's words</small></label>
+          <textarea id="gPrompt" placeholder="Describe the subject in plain words, or press Auto-describe below"></textarea>
+          <span class="help" id="descHint"></span></div>
+        <div class="row"><button id="btnDescribe" style="flex:1">Auto-describe</button></div>
+
+        <div class="grid2">
+          <div class="f"><label for="uRes"><b>Resolution</b></label><select id="uRes"></select></div>
+          <div class="f"><label for="gFirst"><b>Reference</b><small>first frame</small></label>
+            <select id="gFirst">
+              <option value="source" selected>the source photo</option>
+              <option value="control">control frame 0</option>
+            </select></div>
+        </div>
+        <span class="help" id="gFirstHint"></span>
+
+        <div class="status" id="stGen"><div class="cap">What will be sent</div></div>
+
+        <div class="adv" data-adv="gen">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="f"><label for="gVision"><b>Vision model</b><small>for auto-describe</small></label>
+              <select id="gVision"></select></div>
+
+            <div id="refsBox" class="f"><label><b>Extra reference images</b></label>
+              <div id="refsStrip" style="display:flex;gap:var(--s-3);flex-wrap:wrap"></div>
+              <button id="refsAdd" class="wide">Add a reference image</button>
+              <input type="file" id="refsFile" accept="image/*" class="hidden">
+              <span class="help" id="refsCap"></span></div>
+
+            <div id="ltxOpts">
+              <div class="grid2">
+                <div class="f"><label for="gInt"><b>LTX intensity</b></label>
+                  <select id="gInt">
+                    <option value="strong-v2" selected>strong-v2</option>
+                    <option value="strong">strong</option>
+                    <option value="light">light</option>
+                  </select></div>
+                <div class="f"><label for="gRef"><b>Detail refine</b></label>
+                  <label class="chk" style="margin-top:var(--s-2)"><input type="checkbox" id="gRef"><span>on</span></label></div>
+              </div>
+            </div>
+
+            <div id="vaceOpts" class="hidden">
+              <div class="grid2">
+                <div class="f"><label for="vSampler"><b>Sampler</b></label>
+                  <select id="vSampler"><option value="unipc" selected>unipc</option>
+                    <option value="dpm++">dpm++</option><option value="euler">euler</option></select></div>
+                <div class="f"><label for="vSteps"><b>Steps</b></label>
+                  <div class="sliderrow"><input type="range" id="vSteps" min="10" max="60" value="30">
+                    <span class="v" id="vStepsVal">30</span></div></div>
+              </div>
+              <div class="f"><label for="vGuide"><b>Guidance</b></label>
+                <div class="sliderrow"><input type="range" id="vGuide" min="10" max="150" value="50">
+                  <span class="v" id="vGuideVal">5.0</span></div></div>
+            </div>
+
+            <div id="wanOpts" class="hidden">
+              <label class="chk"><input type="checkbox" id="wExpand"><span>Let the engine rewrite the prompt</span></label>
+              <label class="chk"><input type="checkbox" id="wThink"><span>Enable thinking</span></label>
+            </div>
+            <div id="mmOpts" class="hidden">
+              <div class="f"><label for="mmExpand"><b>Prompt expansion</b><small>fast protects the turntable wording</small></label>
+                <select id="mmExpand"><option value="fast" selected>fast &mdash; rewrites least</option>
+                  <option value="balanced">balanced</option><option value="quality">quality</option></select></div>
+            </div>
+
+            <div class="grid2">
+              <div class="f"><label for="uSeed"><b>Seed</b></label>
+                <input type="text" id="uSeed" placeholder="blank = random"></div>
+              <div class="f"><label for="uNeg"><b>Negative prompt</b></label>
+                <input type="text" id="uNeg" placeholder="none"></div>
+            </div>
+          </div>
+        </div>
+
+        <button class="primary" id="btnGen">Generate &mdash; review before it is sent</button>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------- 5 Review --- -->
+    <div class="step" id="stepReview" data-step="5">
+      <div class="head" role="button" tabindex="0"><span class="num">5</span><span class="title">Review</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="inlinemedia" id="aiClipBox"></div>
+
+        <div class="f"><label for="uAlpha"><b>Alpha</b><small>the matte, and what training uses</small></label>
+          <select id="uAlpha"></select></div>
+        <div class="f hidden" id="mattePromptBox"><label for="aiMattePrompt"><b>Nouns to keep</b></label>
+          <input type="text" id="aiMattePrompt" placeholder="a horse. a person. a car."></div>
+        <button id="btnAiRmbg" class="wide">Run the matte</button>
+
+        <div class="status" id="stReview"><div class="cap">Review</div></div>
+
+        <div class="adv" data-adv="review">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="row"><button id="btnAiUp" style="flex:1">Upload your own video</button>
+              <input type="file" id="aiFile" accept="video/mp4" class="hidden">
+              <button id="btnAuthAlpha" style="flex:1" title="diagnostic only: what the control render actually drew">Render the authored alpha</button></div>
+            <button id="btnRetimeAdv" class="wide">Retime to the pose count</button>
+          </div>
+        </div>
+
+        <div class="row"><button id="btnRetry" style="flex:1">Retry &mdash; reset this stage</button></div>
+        <button class="primary" id="btnApprove">Approve this clip</button>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------- 6 Train --- -->
+    <div class="step" id="stepTrain" data-step="6">
+      <div class="head" role="button" tabindex="0"><span class="num">6</span><span class="title">Train</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="sSteps"><b>Training steps</b><small>quality measured to peak near 15,000</small></label>
+          <input type="number" id="sSteps" step="1000" value="50000">
+          <span class="help">Past ~15,000 Brush stops creating splats and the optimiser can only stretch what it has.</span></div>
+
+        <div class="status" id="stTrain"><div class="cap">Train</div></div>
+
+        <div class="adv" data-adv="train">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="grid2">
+              <div class="f"><label for="sDetail"><b>Detail preset</b></label>
+                <select id="sDetail">
+                  <option value="stock" selected>stock &mdash; Brush defaults</option>
+                  <option value="broad">broad</option><option value="balanced">balanced</option>
+                  <option value="quality">quality</option><option value="fine">fine</option>
+                </select></div>
+              <div class="f"><label for="sSH"><b>SH degree</b></label>
+                <input type="number" id="sSH" min="0" max="3" step="1" value="3"></div>
+            </div>
+            <span class="help">The tuned presets measured worse than stock. Use deliberately.</span>
+            <label class="chk"><input type="checkbox" id="sClean"><span>Prune and de-needle after training</span></label>
+            <label class="chk"><input type="checkbox" id="sRerun"><span>Live Rerun telemetry</span></label>
+            <div class="grid2" id="rerunOpts">
+              <div class="f"><label for="sRrStats"><b>Stats every</b><small>steps</small></label>
+                <input type="number" id="sRrStats" step="10" value="50"></div>
+              <div class="f"><label for="sRrSplats"><b>Splat cloud every</b><small>0 = never</small></label>
+                <input type="number" id="sRrSplats" step="100" value="0"></div>
+            </div>
+            <div class="row"><button id="btnRerunOpen" style="flex:1">Open the Rerun viewer</button>
+              <button id="btnSplatUp" style="flex:1">Upload a .ply</button>
+              <input type="file" id="splatFile" accept=".ply" class="hidden"></div>
+            <span class="help" id="rerunHint"></span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="btnSplat">Train the splat</button>
+          <button id="btnDataset" title="The identical pipeline, stopping before Brush">Build dataset only</button>
+        </div>
+        <div class="status" id="stReport"><div class="cap">Training runs</div></div>
+      </div>
+    </div>
+
+  </div><!-- /rail -->
+
+  <div class="stagearea">
+    <div class="vp" id="vpAuthor">
+      <canvas id="cvAuthor"></canvas>
+      <canvas id="cvSplat" class="hidden"></canvas>
+      <div class="vpbar">
+        <button id="fSplit" class="on" title="split: free view | the camera's view">Split</button>
+        <button id="vCard" class="on" title="the flat source card">Card</button>
+        <button id="vClay" title="The camera view shows flat clay, exactly as the control video renders. Click to preview the photo colours.">Camera: clay</button>
+        <button id="gizBtn" title="cycle the gizmo">Gizmo: off</button>
+        <select id="gizTarget" title="what the gizmo moves">
+          <option value="subject">subject</option>
+          <option value="crop">crop sphere</option>
+        </select>
+        <span class="sp"></span>
+        <select id="ckSel" class="hidden" title="checkpoint"></select>
+        <label class="inline hidden" id="ckFollowL"><input type="checkbox" id="ckFollow" checked> follow latest</label>
+        <button id="ckRig" class="hidden">Rig view</button>
+        <button id="ckFocus" class="hidden">Focus</button>
+        <button id="ckReload" class="hidden">Reload</button>
+        <span class="tag" id="ckInfo"></span>
+        <button id="btnAbort" class="hidden danger">Stop training</button>
+        <button id="fPrevPanel">Files</button>
+      </div>
+      <div class="panelabels" id="paneLabels">
+        <span id="shotLabel">free view</span><span id="shotLabel2">camera view</span>
+      </div>
+      <div class="filespanel" id="filesAuthor">
+        <div class="cap"><span>Files this project has produced</span><span class="sp"></span>
+          <span class="live" title="refreshes by itself when a file changes">live</span>
+          <button id="filesAuthorClose">Close</button></div>
+        <div class="list" id="filesAuthorList"></div>
+      </div>
+    </div>
+    <!-- the playhead: full width, between the viewport and the console -->
+    <div class="scrub" id="scrubAuthor">
+      <button id="fPrev" class="sq" title="previous frame (←)" aria-label="Previous frame">&#8249;</button>
+      <button id="fPlay" class="sq play" title="play the orbit (space)" aria-label="Play">&#9654;</button>
+      <button id="fNext" class="sq" title="next frame (→)" aria-label="Next frame">&#8250;</button>
+      <div class="track"><input type="range" id="fSlider" min="0" max="0" value="0" aria-label="Frame"></div>
+      <span class="fnum" id="fNum">frame 0</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= PASSES === -->
+<section class="workspace" id="wsPassesPane">
+  <div class="rail" id="railPasses">
+
+    <div class="status" id="stInherited" style="margin:var(--s-5)">
+      <div class="cap">Inherited from the author workspace &mdash; never editable</div>
+    </div>
+
+    <div class="step open" id="paStepSplat" data-step="1">
+      <div class="head" role="button" tabindex="0"><span class="num">1</span><span class="title">Splat</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="paPick"><b>Checkpoint</b></label><select id="paPick"></select></div>
+        <div class="row"><button id="paReload" style="flex:1">Re-list and reload</button>
+          <button id="paUpload" style="flex:1">Upload a .ply</button>
+          <input type="file" id="paFile" accept=".ply" class="hidden"></div>
+        <div class="status" id="stPaSplat"><div class="cap">Splat</div></div>
+      </div>
+    </div>
+
+    <div class="step" id="paStepRings" data-step="2">
+      <div class="head" role="button" tabindex="0"><span class="num">2</span><span class="title">Rings</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label><b>Pass</b></label>
+          <div class="seg" id="paWhich">
+            <button data-w="top" class="on">&#8593; above</button>
+            <button data-w="bottom">&#8595; below</button>
+          </div></div>
+
+        <div class="grid2">
+          <div class="f"><label for="paAimZ"><b>Aim height</b></label><input type="number" id="paAimZ" step="0.1" value="2.3"></div>
+          <div class="f"><label for="paSweep"><b>Sweep</b><small>&deg; per pass</small></label><input type="number" id="paSweep" step="5" value="360"></div>
+        </div>
+        <div class="grid2">
+          <div class="f"><label for="paTopZ"><b>&#8593; Above height</b></label><input type="number" id="paTopZ" step="0.1" value="5"></div>
+          <div class="f"><label for="paTopR"><b>&#8593; Above radius</b></label><input type="number" id="paTopR" step="0.1" value="9"></div>
+        </div>
+        <div class="grid2">
+          <div class="f"><label for="paBotZ"><b>&#8595; Below height</b></label><input type="number" id="paBotZ" step="0.1" value="-1"></div>
+          <div class="f"><label for="paBotR"><b>&#8595; Below radius</b></label><input type="number" id="paBotR" step="0.1" value="9"></div>
+        </div>
+
+        <div class="status" id="stRings"><div class="cap">Rings</div></div>
+        <button class="primary" id="btnPaRender">Render the above pass</button>
+      </div>
+    </div>
+
+    <div class="step" id="paStepSend" data-step="3">
+      <div class="head" role="button" tabindex="0"><span class="num">3</span><span class="title">Send</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <div class="f"><label for="paEngine"><b>Engine</b></label><select id="paEngine"></select></div>
+        <div class="status" id="stPaEngine"><div class="cap">Engine</div></div>
+        <div class="f"><label for="paPrompt"><b>Pass prompt</b><small>the same description the author tab uses</small></label>
+          <textarea id="paPrompt" placeholder="the same subject description the author tab uses"></textarea>
+          <span class="help" id="paDescHint"></span></div>
+        <div class="f"><label for="paURes"><b>Resolution</b></label><select id="paURes"></select></div>
+
+        <div class="status" id="stPaSend"><div class="cap">What will be sent</div></div>
+
+        <div class="adv" data-adv="pasend">
+          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
+            <span class="n"></span></button>
+          <div class="advbody">
+            <div class="lbl"><b>Soften this pass</b></div>
+            <div class="grid2">
+              <div class="f"><label for="paSoftDown"><b>Downsample</b><small>&times;</small></label>
+                <input type="number" id="paSoftDown" min="1" max="4" step="1" value="1"></div>
+              <div class="f"><label for="paSoftBlur"><b>Blur</b><small>px</small></label>
+                <div class="sliderrow"><input type="range" id="paSoftBlur" min="0" max="12" value="0">
+                  <span class="v" id="paSoftBlurV">0</span></div></div>
+            </div>
+            <button id="btnPaSoften" class="wide">Build the softened pass</button>
+
+            <div id="paLtxOpts">
+              <div class="grid2">
+                <div class="f"><label for="paInt"><b>LTX intensity</b></label>
+                  <select id="paInt"><option value="strong-v2" selected>strong-v2</option>
+                    <option value="strong">strong</option><option value="light">light</option></select></div>
+                <div class="f"><label for="paRefine"><b>Detail refine</b></label>
+                  <label class="chk" style="margin-top:var(--s-2)"><input type="checkbox" id="paRefine"><span>on</span></label></div>
+              </div>
+            </div>
+            <div id="paVaceOpts" class="hidden">
+              <div class="grid2">
+                <div class="f"><label for="paVaceSampler"><b>Sampler</b></label>
+                  <select id="paVaceSampler"><option value="unipc" selected>unipc</option>
+                    <option value="dpm++">dpm++</option><option value="euler">euler</option></select></div>
+                <div class="f"><label for="paVaceSteps"><b>Steps</b></label>
+                  <div class="sliderrow"><input type="range" id="paVaceSteps" min="10" max="60" value="30">
+                    <span class="v" id="paVaceStepsVal">30</span></div></div>
+              </div>
+              <div class="f"><label for="paVaceGuide"><b>Guidance</b></label>
+                <div class="sliderrow"><input type="range" id="paVaceGuide" min="10" max="150" value="50">
+                  <span class="v" id="paVaceGuideVal">5.0</span></div></div>
+            </div>
+            <div id="paWanOpts" class="hidden">
+              <label class="chk"><input type="checkbox" id="paWanExpand"><span>Let the engine rewrite the prompt</span></label>
+              <label class="chk"><input type="checkbox" id="paWanThink"><span>Enable thinking</span></label>
+            </div>
+            <div id="paMmOpts" class="hidden">
+              <div class="f"><label for="paMmExpand"><b>Prompt expansion</b></label>
+                <select id="paMmExpand"><option value="fast" selected>fast</option>
+                  <option value="balanced">balanced</option><option value="quality">quality</option></select></div>
+            </div>
+            <div class="grid2">
+              <div class="f"><label for="paUSeed"><b>Seed</b></label><input type="text" id="paUSeed" placeholder="blank = random"></div>
+              <div class="f"><label for="paUNeg"><b>Negative prompt</b></label><input type="text" id="paUNeg" placeholder="none"></div>
+            </div>
+            <div class="f"><label><b>Aspect</b><small>forced from the author clip</small></label>
+              <div class="derived"><span class="v" id="paAspectD">&mdash;</span>
+                <span class="from">one COLMAP camera</span></div></div>
+          </div>
+        </div>
+
+        <button class="primary" id="paSend">Send this pass &mdash; review before it goes</button>
+      </div>
+    </div>
+
+    <div class="step" id="paStepDataset" data-step="4">
+      <div class="head" role="button" tabindex="0"><span class="num">4</span><span class="title">Dataset</span>
+        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
+      <div class="body">
+        <p class="help">The author orbit is always included: it is the ring frame 0 anchors, and the only one with a real photograph behind it.</p>
+        <label class="chk"><input type="checkbox" id="dsTop"><span>&#8593; include the above pass</span></label>
+        <label class="chk"><input type="checkbox" id="dsBottom"><span>&#8595; include the below pass</span></label>
+        <label class="chk"><input type="checkbox" id="dsInitSplat" checked>
+          <span>Seed the init cloud from the trained splat (a refinement, not a fresh solve)</span></label>
+        <div class="f"><label for="dsMatte"><b>Alpha for the merged set</b></label><select id="dsMatte"></select></div>
+        <div class="status" id="stDataset"><div class="cap">Dataset</div></div>
+        <button class="primary" id="btnDsBuild">Build dataset_complete/</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stagearea">
+    <div class="vp" id="vpPasses">
+      <canvas id="cvPasses"></canvas>
+      <div class="vpbar">
+        <button id="paSplit" class="on">Split</button>
+        <button id="paShowRings" class="on">Rings</button>
+        <button id="paReset">Reset view</button>
+        <span class="sp"></span>
+        <span class="tag" id="paRenderOut"></span>
+        <button id="btnPaCancel" class="hidden danger">Cancel render</button>
+        <button id="paFilesOn">Files</button>
+      </div>
+      <div class="panelabels">
+        <span id="paTagFree">free view</span>
+        <span id="paTagTop">&#8593; above</span>
+        <span id="paTagBot">&#8595; below</span>
+      </div>
+      <div class="vpempty" id="paEmpty">
+        No splat in this project yet. Train one in the author workspace, or upload a .ply in step 1.
+      </div>
+      <div class="filespanel" id="filesPasses">
+        <div class="cap"><span>Files this project has produced</span><span class="sp"></span>
+          <span class="live" title="refreshes by itself when a file changes">live</span>
+          <button id="filesPassesClose">Close</button></div>
+        <div class="list" id="filesPassesList"></div>
+      </div>
+    </div>
+    <div class="scrub" id="scrubPasses">
+      <button id="paFramePrev" class="sq" title="previous frame (←)" aria-label="Previous frame">&#8249;</button>
+      <button id="paPlay" class="sq play" title="play the passes (space)" aria-label="Play">&#9654;</button>
+      <button id="paFrameNext" class="sq" title="next frame (→)" aria-label="Next frame">&#8250;</button>
+      <div class="track"><input type="range" id="paFrame" min="0" max="0" value="0" aria-label="Frame"></div>
+      <span class="fnum" id="paFrameLbl">frame 0</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================================================ job bar === -->
+<div class="jobbar">
+  <div class="jobhead">
+    <span class="jobstage" id="bStage">idle</span>
+    <div class="prog"><i id="fill"></i></div>
+    <span id="msg"></span>
+    <span id="elsewhere"></span>
+    <div class="grp" id="conPanes" style="display:flex;border:1px solid var(--line)">
+      <button data-pane="log" class="on">Console</button>
+      <button data-pane="sent">Sent to fal</button>
+    </div>
+    <button id="conToggle" title="show / hide the console" aria-label="Show or hide the console">&#9663;</button>
+  </div>
+
+  <div class="console" id="console">
+    <div class="contabs" id="conTabs">
+      <span class="t-micro dim">level</span>
+      <button class="lv on" data-lv="info">info</button>
+      <button class="lv on" data-lv="warn">warn</button>
+      <button class="lv on" data-lv="error">error</button>
+      <button class="lv on" data-lv="io">io</button>
+      <button class="lv on" data-lv="ui">ui</button>
+      <button id="conAll" title="show everything">All</button>
+      <input type="search" id="conFind" placeholder="filter text or source">
+      <span class="sp"></span>
+      <label class="inline t-micro dim" style="display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="conFollow" checked> follow</label>
+      <button id="conClear" title="clear what is on screen; the server ring is untouched">Clear</button>
+      <span class="conmeta" id="conMeta"></span>
+    </div>
+    <div class="conbody" id="conBody"></div>
+    <div id="sentBody" class="hidden"></div>
+  </div>
+</div>
+
+<!-- ==================================================== approval window === -->
+<div class="apvwrap" id="apvWrap">
+  <div class="apv">
+    <div class="h">
+      <h2 id="apvTitle">Approve</h2>
+      <div class="sub" id="apvSub"></div>
+      <div class="dir" id="apvDir"></div>
+    </div>
+    <div class="b">
+      <div class="apvcards" id="apvCards"></div>
+      <div class="apvsec" id="apvSettingsSec"><div class="cap">Exactly what is sent</div>
+        <div id="apvSettings"></div></div>
+      <div class="apvsec" id="apvNotesSec"><div class="cap">Notes</div>
+        <div id="apvNotes"></div></div>
+      <div id="apvProblems"></div>
+    </div>
+    <div class="f">
+      <span id="apvTotal"></span><span class="sp"></span>
+      <button id="apvCancel">Cancel</button>
+      <button id="apvGo">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= dialog === -->
+<div class="dlg" id="dlg">
+  <div class="box">
+    <h2 id="dlgTitle"></h2>
+    <div id="dlgBody"></div>
+    <input type="text" id="dlgInput" class="hidden">
+    <div class="btns">
+      <button id="dlgCancel">Cancel</button>
+      <button id="dlgOk" style="background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- GSAP drives every transition; fx.js falls back to instant states if it
+     is missing or the OS asks for reduced motion. -->
+<script src="/web/vendor/gsap.min.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"/web/vendor/three.module.js",
+  "three/addons/controls/OrbitControls.js":"/web/vendor/OrbitControls.js",
+  "three/addons/controls/TransformControls.js":"/web/vendor/TransformControls.js"
+}}
+</script>
+<script type="module" src="/web/app.js"></script>
+</body>
+</html>

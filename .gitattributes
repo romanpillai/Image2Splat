@@ -1,0 +1,5 @@
+# Normalise line endings in the repository; check out native on each OS.
+* text=auto
+*.png binary
+*.jpg binary
+*.mp4 binary

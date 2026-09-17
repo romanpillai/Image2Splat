@@ -1,0 +1,46 @@
+# Secrets. The fal key lives here and must never reach the remote.
+.env
+*.key
+
+# Local settings (copy config.example.json to make one)
+config.json
+
+# Per-project working data: photos, control and AI videos, mattes, datasets,
+# trained splats, depth caches. Large, personal, and not source code.
+projects/
+
+# Brush is a separate download (see README), unpacked here by default
+brush/
+
+# Local notes and backups that are not part of the tool
+_backup_*/
+CHANGE_REQUESTS.md
+HANDOFF*.md
+calib.py
+
+# Python and editor noise
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.bak_*
+*.py.bak*
+*.js.bak*
+*.html.bak*
+_pano_upload.bin
+
+# Model checkpoints are fetched on first use, never vendored
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.ply
+*.npz
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Brush trainer autotune cache, regenerated at runtime
+target/

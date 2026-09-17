@@ -1,0 +1,9 @@
+# Optional extras. Everything works without them; the features below simply
+# report that they are not installed.
+#   pip install -r requirements-optional.txt
+
+# MatAnyone video matting (Review -> Alpha). Licence: NTU S-Lab 1.0, NON-COMMERCIAL.
+matanyone @ git+https://github.com/pq-yang/MatAnyone@e5ddc534c1fff9bb9e54cf476095d29071b7cb4f
+
+# Live training telemetry in the Rerun viewer (Train -> Advanced).
+rerun-sdk==0.36.3

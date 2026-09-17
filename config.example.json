@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy this file to config.json (which stays local and is never committed). Relative paths resolve against this folder. Leave a value empty to use its default.",
+
+  "brush": "./brush/brush_app.exe",
+  "python": "",
+  "projects": "./projects",
+
+  "host": "127.0.0.1",
+  "port": 8771,
+
+  "log_ring": 5000
+}
