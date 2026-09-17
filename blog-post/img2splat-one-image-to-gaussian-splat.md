@@ -1,11 +1,12 @@
-# One image in, a Gaussian splat out — what I learned building Img2Splat
+# One image in, a Gaussian splat out — what I learned building Image2Splat
 
 *A research write-up and a recipe. Everything here ran on one consumer GPU, in a
-Windows bedroom, between 3 August and 12 September 2026. It is written so you can
+Windows bedroom, between 3 August and 17 September 2026. It is written so you can
 reproduce it by hand, or hand the whole thing to a coding agent and let it build the
-tool for you.*
+tool for you. Or skip both: the tool is in this repository, and the
+[README](../README.md) gets it running.*
 
-![The current tool, author workspace. Left: the six steps. Middle: the free 3D view of the point cloud and camera rig. Right: what the camera actually sees.](images/beta-author-default.png)
+![From one photo to a Gaussian splat: the photo, the lifted point cloud, the control video, the AI video, the trained splat.](../docs/media/pipeline.png)
 
 ---
 
@@ -22,14 +23,17 @@ tool for you.*
   does not work, and it is not a tuning problem. AI video is not rigid. The subject
   changes shape as it turns. COLMAP registered 2 of 97 frames.
 - **What it costs:** one fal.ai video generation per orbit, a few minutes of local
-  matting, and 5–15k steps of Brush training. Under an hour of wall clock for a first
-  result.
+  matting, and 5–20k steps of Brush training — 20k steps took six minutes on the 5070.
+  Under an hour of wall clock for a first result.
 - **What is still hard:** the video model's inconsistency shows up in the splat as
   black patches from certain angles. I measured it — it is spherical-harmonic
   overfitting, not geometry — and there are cheap mitigations, but no cure yet.
 - **This will be replaced.** Direct image-to-3D generators are improving monthly. But
   today, for a *specific* image you designed and want reproduced faithfully rather than
   re-imagined, nothing is as straightforward as this.
+- **Get it:** the tool is **Image2Splat**, MIT-licensed, in this repository. No model weights are
+  hosted — each downloads from its own source on first use. Bring your own fal.ai key
+  and a copy of Brush.
 
 ---
 
@@ -53,7 +57,7 @@ numbers in so you can tell which claims are load-bearing.
 | Python | 3.12, one `uv`-managed venv, **torch 2.8 + CUDA 12.9** |
 | Splat trainer | [Brush](https://github.com/ArthurBrussee/brush) — a single `brush_app.exe`, no install |
 | Video generation | [fal.ai](https://fal.ai) hosted endpoints (LTX 2.3, Wan 3.0, Wan 2.2 VACE, MiniMax H3) |
-| Local models | MoGe-2 (metric depth), GeoCalib (camera pitch/roll/FOV), BiRefNet-HR and SAM 2.1 (matting) |
+| Local models | MoGe-2 (metric depth and lens), BiRefNet-HR, SAM 2.1 and RMBG-1.4 (matting). GeoCalib (camera pitch/roll/FOV) until mid-September — see below for why it went |
 | Auto-describe | a vision model through OpenRouter — gpt-4o-mini by default; Claude Sonnet 5 / Opus 5 cost ~11× more and are still under a cent |
 
 One hard-won note on the GPU: **Blackwell cards need torch built for CUDA 12.8 or
@@ -151,7 +155,7 @@ existed as a 3D model. The thing I actually wanted was to start from **one image
 ```
                 photo
                   │
-    lift into 3D  │  depth model + calibrated camera
+    lift into 3D  │  depth model, lens measured from the photo
                   ▼
         point cloud on a "card"
                   │
@@ -173,6 +177,8 @@ existed as a 3D model. The thing I actually wanted was to start from **one image
 The video model is used for the one thing it is good at — inventing plausible
 appearance from angles that were never photographed — and kept away from the one thing
 it is bad at, which is geometric consistency. Geometry comes from the orbit you authored.
+
+![Control render, AI video and trained splat, turning together. Frame i is the same camera in all three.](../docs/media/turntable.gif)
 
 ---
 
@@ -205,6 +211,8 @@ greys plus one accent, and one rule that drove the whole rebuild:
 > **If a condition should stop the user, it is a status row that disables the primary
 > button.** A red sentence inside a paragraph is decoration.
 
+![The September beta, author workspace. Left: the six steps. Middle: the free 3D view of the point cloud and camera rig. Right: what the camera actually sees.](images/beta-author-default.png)
+
 ![Source and Cloud steps. The relief slider and isolated-point cleanup are out front because they are the two controls you actually reach for when a lift looks wrong.](images/beta-author-source-and-cloud-steps.png)
 
 ![The Shot step. Radius, elevation, aim height, canvas, lens. The status block underneath is what you check before rendering.](images/beta-author-shot-step-frog.png)
@@ -217,6 +225,56 @@ The console along the bottom is deliberately a headline feature. Every click log
 file written or sent logs its full path. Every error is stamped so it cannot resurface
 under an unrelated button later. When something goes wrong at 2am, "which file did that
 actually use" is the only question that matters.
+
+### Image2Splat (mid-September): the public release
+
+Same code, a new name, and a round of cuts made by using it rather than by planning it.
+
+![Image2Splat, the Shot step. Elevation reads "front-on, locked" and the canvas "matches the photo". Middle: the lifted frog seen from the side, relief and all. Right: what the orbit camera sees on frame 1, with the colour preview on.](images/image2splat-shot-step-frog.png)
+
+- **GeoCalib is gone.** The camera now sits at elevation 0, looking straight at the
+  front, with a canvas at the photo's own aspect (long edge 1920). A camera that
+  reproduces the photo head-on leaves pitch and roll with nothing to do. MoGe-2 was
+  already measuring the field of view, so it runs on upload and seeds the lens. The
+  Passes workspace still goes above and below — that is its whole job.
+- **Flat clay.** The control render used to fake a Lambert shade from the depth slopes.
+  Now every point is one grey, 150, against a backdrop of 60, far enough apart that the
+  matte still has an edge to find. The trade is real: the video model gets the outline
+  and the motion but no surface form inside it, and has to take that from the prompt
+  and the reference photo. The camera pane can preview the photo colours; the render
+  stays clay.
+- **Every button answers.** A spinner and a verb while it works, then a tick or a cross.
+  Server refusals arrive as a toast, and a value the tool changes for you blinks once.
+- **The point cloud survives a refresh.** Every lift is saved in the project with the
+  settings that made it and read back when the project opens. The MoGe-2 depth map is
+  cached too, so re-lifting after a slider change no longer re-runs the model.
+- **A playhead under the viewport**, full width, in both workspaces.
+- **An independent review.** A second agent graded user flow, animation, ease of use and
+  feedback. It went 6.5, then 8.0, then 8.5 out of 10 over three rounds, and each round's
+  complaints were the to-do list for the next.
+- **Packaged for other people.** Pinned requirements, the fal key in a `.env` file,
+  every model downloaded from its own source on first use, MIT licence.
+
+---
+
+## What it makes
+
+![Ten splats, each from one photo, each shown through one of its own COLMAP cameras.](../docs/media/gallery.jpg)
+
+Every tile is the trained splat, rasterised with gsplat through a camera **taken
+straight out of that subject's own COLMAP model** — rotation, position and focal length
+as trained. The only liberty is the crop: the focal length is scaled and the principal
+point shifted, which is exactly a crop of that camera's image and changes nothing about
+where it stands. No flattering invented viewpoint. The insets are the photo each one
+started from — except the knife, where the original photo was not kept and the inset is
+frame 1 of the AI video.
+
+The steps and engines vary because these were made over six weeks while the tool
+changed underneath them. The spiky one was trained on 17 September with stock Brush
+settings, 20,000 steps, from a dataset the tool had built three weeks earlier: the 5k
+export landed after a minute, the 20k after six. Look at the soft edges and the dark
+streaks trailing off the horse. That is the price of training on a video that does not
+quite agree with itself, and most of the findings below are about it.
 
 ---
 
@@ -422,15 +480,16 @@ points from the trained PLY instead of a visual-hull carve.
 
 1. **Environment.** Python 3.12, torch built for your CUDA (cu128+ on Blackwell),
    OpenCV, numpy, ffmpeg on PATH. Download `brush_app.exe`. Get a fal.ai key.
-2. **Lift the photo.** Run a metric depth model (MoGe-2) on the image. Optionally run
-   GeoCalib for pitch/roll/vFOV — it seeds the camera, it should never override you.
-   Displace each pixel along its camera ray by the depth. That is your point cloud.
-3. **Author the orbit.** Pick radius, elevation, aim height, vertical FOV, canvas size,
-   frame count and fps. Generate camera poses on a circle in COLMAP convention
-   (+Z forward, +Y down). Frame 0 at −90° azimuth, looking at the aim point, world-up +Z.
-4. **Render the control video** of the point cloud along that orbit on a flat neutral
-   grey backdrop. Grey, not black — black and a dark subject are indistinguishable to a
-   matte.
+2. **Lift the photo.** Run a metric depth model (MoGe-2) on the image. It also measures
+   the field of view — use that as the starting lens, never as an override. Displace
+   each pixel along its camera ray by the depth. That is your point cloud.
+3. **Author the orbit.** Pick radius, aim height, vertical FOV, frame count and fps.
+   Keep elevation at 0 and the canvas at the photo's aspect, so frame 0 reproduces the
+   photo. Generate camera poses on a circle in COLMAP convention (+Z forward, +Y down).
+   Frame 0 at −90° azimuth, looking at the aim point, world-up +Z.
+4. **Render the control video** of the point cloud along that orbit: every point one
+   flat grey (150), on a darker flat grey backdrop (60). Grey, not black — black and a
+   dark subject are indistinguishable to a matte.
 5. **Send to a pose-exact engine** (LTX 2.3 or Wan 2.2 VACE) with the control video,
    the source photo as the reference image, and the flash-lit turntable prompt. Ask for
    exactly the frame count you rendered.
@@ -443,7 +502,8 @@ points from the trained PLY instead of a visual-hull carve.
    focal length scaled by delivered/authored size. One image line per frame in pose
    order. Init points from a visual hull carved from the mattes.
 9. **Train.** `brush_app.exe <dataset> --total-steps 15000 --sh-degree 1
-   --export-every 5000`. Keep the 5k export.
+   --export-every 5000`. Keep the 5k export. The tool itself defaults to stock Brush
+   settings, because every tuned preset I built measured worse than stock side by side.
 10. **Optional second round.** Load the splat, orbit it from above and below, render
     those as control videos *at the author AI video's exact size and fps*, send them
     through the same engine, and build one dataset with all three rings and the trained
@@ -453,10 +513,11 @@ points from the trained PLY instead of a visual-hull carve.
 
 > Build me a local web tool that turns one photograph into a Gaussian splat. Python
 > backend (FastAPI), plain JavaScript frontend with a three.js viewport. Pipeline:
-> upload photo → GeoCalib for camera pitch/roll/vFOV → MoGe-2 metric depth → lift pixels
-> into a point cloud on a card → author a circular camera orbit (radius, elevation, aim
-> height, vFOV, canvas, frames, fps) with the orbit poses generated in COLMAP convention
-> → render a control video of the cloud along the orbit on flat grey → send control video
+> upload photo → MoGe-2 metric depth and field of view → lift pixels into a point cloud
+> on a card → author a circular camera orbit (radius, aim height, vFOV, frames, fps;
+> elevation 0 and a canvas at the photo's aspect, so frame 0 reproduces the photo) with
+> the orbit poses generated in COLMAP convention → render a control video of the cloud
+> along the orbit as flat grey clay on a darker grey backdrop → send control video
 > + source photo + prompt to a fal.ai video endpoint (LTX 2.3 render-to-real, or Wan 2.2
 > VACE) → verify the returned clip's frame count, fps and aspect match, and if not warn
 > the user to RE-RENDER the control video rather than retime the result → matte the AI
@@ -466,7 +527,9 @@ points from the trained PLY instead of a visual-hull carve.
 > Rules: the camera card must be a fixed object in world space, never rescaled from the
 > radius. Every derived value (lens, canvas, frame count) must be shown with where it
 > came from. Any condition that should stop the user must disable the primary button, not
-> just print red text. Show the exact prompt string and the full path of every file
+> just print red text. Every button shows progress while it works and a tick or a cross
+> when it ends. Save the lifted point cloud in the project so a refresh does not lose it.
+> Show the exact prompt string and the full path of every file
 > before anything is sent. Log every click and every file operation with its full path
 > to a console in the UI. Add a second workspace that loads the trained splat, defines
 > orbits above and below it, renders them as control videos inheriting the author clip's
@@ -521,10 +584,14 @@ guess.
 | subject size vs radius | exactly 1/radius, ±2 px of 1440 | Img2Splat_beta |
 | softening floor fal refuses | 156×156 (4× on 624) | Img2Splat_beta |
 | LPIPS buffer request | 13.1 GB fixed | Brush, this build |
+| stock Brush, 20k steps, 150 frames at 832×480 | 5k export in ~1 min, 20k in ~6 min | Image2Splat, RTX 5070 |
+| independent UI review, three rounds | 6.5 → 8.0 → 8.5 / 10 | Image2Splat |
+| clay grey vs backdrop grey | 150 vs 60 (0–255) | Image2Splat |
 
 ---
 
-*Tools: Brush by Arthur Brussee. fal.ai for hosting the video models. MoGe-2, GeoCalib,
-BiRefNet, SAM 2.1, CoTracker3 for the local models. The tool itself was built with an
+*Tools: Brush by Arthur Brussee. fal.ai for hosting the video models. MoGe-2, BiRefNet,
+SAM 2.1 and RMBG-1.4 for the local models; GeoCalib and CoTracker3 along the way. gsplat
+for the gallery renders. The tool itself was built with an
 AI coding agent in the loop for most of it — the measurements are mine, the arguing about
 what they meant was shared.*

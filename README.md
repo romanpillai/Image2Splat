@@ -9,7 +9,15 @@ with the exact camera poses it was authored with.
 > Video generation runs on [fal.ai](https://fal.ai) and is **paid per clip** on
 > your own account.
 
+![From one photo to a Gaussian splat: photo, point cloud, control video, AI video, trained splat](docs/media/pipeline.png)
+
 ## How it works
+
+The camera orbit is decided **before** anything is generated, so the control
+render, the AI video and the trained splat all turn in lockstep: frame *i* is
+the same camera in every one of them.
+
+![The control render, the AI video and the trained splat turning in sync](docs/media/turntable.gif)
 
 The app walks you through six steps in a left-hand rail, with a 3D viewport on
 the right that previews everything live.
@@ -31,6 +39,10 @@ console at the bottom.
 
 The full story, with the dead ends, the measurements and the lessons, is in the
 write-up: **[One image in, a Gaussian splat out](blog-post/img2splat-one-image-to-gaussian-splat.md)**.
+
+## Gallery
+
+![Ten Gaussian splats, each made from a single photo and shown through one of its own COLMAP cameras](docs/media/gallery.jpg)
 
 ## Requirements
 
@@ -161,6 +173,7 @@ falclient.py        fal.ai engines and prompts
 web/                the browser app (plain ES modules, no build step)
 web/vendor/         three.js, PlayCanvas, GSAP
 blog-post/          the write-up and its screenshots
+docs/media/         the images in this README
 projects/           your work (created on first run, not committed)
 ```
 
