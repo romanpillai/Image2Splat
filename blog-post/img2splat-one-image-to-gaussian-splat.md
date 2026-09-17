@@ -259,7 +259,7 @@ Same code, a new name, and a round of cuts made by using it rather than by plann
 
 ## What it makes
 
-![Ten splats, each from one photo, each shown through one of its own COLMAP cameras.](../docs/media/gallery.jpg)
+![Nine splats, each from one photo, each shown through one of its own COLMAP cameras.](../docs/media/gallery.jpg)
 
 Every tile is the trained splat, rasterised with gsplat through a camera **taken
 straight out of that subject's own COLMAP model** — rotation, position and focal length
@@ -275,6 +275,15 @@ settings, 20,000 steps, from a dataset the tool had built three weeks earlier: t
 export landed after a minute, the 20k after six. Look at the soft edges and the dark
 streaks trailing off the horse. That is the price of training on a video that does not
 quite agree with itself, and most of the findings below are about it.
+
+One subject all the way round, through all three stages:
+
+![Walter White: the control render, the LTX 2.3 clip and the trained splat (20k steps), frame by frame through the same 120 cameras.](../docs/media/walter_turntable.gif)
+
+This one went through LTX 2.3, the pose-exact engine, and it shows: the splat holds the
+face, the glasses and the hat brim through the whole turn. The clip itself opens on a
+desert sky that fades to studio grey, and some frames come back letterboxed. The dataset
+frames carry the matte as alpha, so neither reaches the splat.
 
 ---
 

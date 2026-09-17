@@ -42,7 +42,12 @@ write-up: **[One image in, a Gaussian splat out](blog-post/img2splat-one-image-t
 
 ## Gallery
 
-![Ten Gaussian splats, each made from a single photo and shown through one of its own COLMAP cameras](docs/media/gallery.jpg)
+![Nine Gaussian splats, each made from a single photo and shown through one of its own COLMAP cameras](docs/media/gallery.jpg)
+
+A full orbit of a portrait: the control render, the LTX 2.3 clip, and the splat
+trained from it (20k steps), all through the same 120 cameras.
+
+![Walter White: control render, AI video and trained splat, frame by frame](docs/media/walter_turntable.gif)
 
 ## Requirements
 
