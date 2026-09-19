@@ -19,7 +19,7 @@ the same camera in every one of them.
 
 ![The control render, the AI video and the trained splat turning in sync](docs/media/turntable.gif)
 
-The app walks you through six steps in a left-hand rail, with a 3D viewport on
+The app walks you through five steps in a left-hand rail, with a 3D viewport on
 the right that previews everything live.
 
 | Step | What happens |
@@ -28,11 +28,13 @@ the right that previews everything live.
 | **2 Cloud** | The photo is lifted into a point cloud with the depth model you pick: MoGe-2 (metric, default), Depth Anything V2 Small / Large, or Depth Anything 3 Metric / Mono. Clean it up or isolate the subject; it re-lifts as you change settings. |
 | **3 Shot** | Author the camera orbit (length, sweep, radius, aim height, lens). The server renders a *control video* of the point cloud from exactly those cameras. |
 | **4 Generate** | The control video and your photo go to a fal.ai video model (LTX 2.3, Wan 2.2 VACE, Wan 3.0, MiniMax H3). An approval window shows exactly what will be sent before anything is paid for. |
-| **5 Review** | Watch the clip, cut a matte of the subject (BiRefNet, SAM 2.1, RMBG-1.4, optional MatAnyone), retime if needed, approve. |
-| **6 Train** | A COLMAP dataset is built with the authored poses and [Brush](https://github.com/ArthurBrussee/brush) trains the splat. Checkpoints appear in the viewport as they land. |
+| **5 Review** | Watch the clip, cut a matte of the subject (BiRefNet, SAM 2.1, RMBG-1.4, optional MatAnyone), retime if needed, then **Build Dataset**: the frames, their mattes, the authored poses and an init point cloud, written to `projects\<name>\dataset\`. |
 
-A second **Passes** tab renders extra orbits (above and below) from the trained
-splat, to generate more views and refine it.
+That dataset is where this tool stops. Open the folder in
+[Brush](https://github.com/ArthurBrussee/brush) and train there, with whatever
+step count and settings you want. Brush writes its `.ply` exports into the
+project's `splat_out\` folder, and the viewport's checkpoint switcher loads
+any that are there.
 
 Every file the tool reads, writes or uploads is logged with its full path in the
 console at the bottom.
@@ -128,6 +130,8 @@ hard-refresh the browser (Ctrl+F5) after changing anything in `web/`.
   plays, **Home / End** jump.
 - **Generate** re-renders an out-of-date control video for you, then opens the
   approval window. Nothing is uploaded until you press *Approve & send* there.
+- **Build Dataset** at the end of Review is the last thing the tool does; it
+  stays greyed out until the matte is cut. Training is Brush's job.
 - Projects live in `projects\<name>\` (not committed). Use the **⋯** menu to
   rename, copy, export or import a project.
 

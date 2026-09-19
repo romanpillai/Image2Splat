@@ -47,3 +47,7 @@ target/
 
 # The write-up stays local; it is not part of what this repository publishes.
 blog-post/
+
+# Brush itself: the README says to put brush_app.exe here, and it is a ~160 MB
+# binary that belongs to its own project, not to this repository.
+brush/
