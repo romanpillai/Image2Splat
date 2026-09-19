@@ -1676,7 +1676,6 @@ export function init() {
 
   // ---- train
   $("btnSplat").onclick = () => trainSplat(false, $("btnSplat")).catch(e => logUi(e.message, "error"));
-  };
   $("btnSplatUp").onclick = () => $("splatFile").click();
   $("splatFile").onchange = async e => {
     const f = e.target.files[0];
