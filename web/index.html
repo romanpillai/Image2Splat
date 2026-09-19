@@ -84,6 +84,15 @@
       <div class="head" role="button" tabindex="0"><span class="num">2</span><span class="title">Cloud</span>
         <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
       <div class="body">
+        <div class="f"><label for="oDepthModel"><b>Depth model</b><small>what lifts the photo into 3D</small></label>
+          <select id="oDepthModel">
+            <option value="moge2" selected>MoGe-2 &mdash; metric (default)</option>
+            <option value="da2">Depth Anything V2 Small &mdash; relative</option>
+            <option value="da2-large">Depth Anything V2 Large &mdash; relative, non-commercial</option>
+            <option value="da3-metric">Depth Anything 3 Metric Large &mdash; metric</option>
+            <option value="da3-mono">Depth Anything 3 Mono Large &mdash; relative</option>
+          </select></div>
+
         <div class="f"><label for="oPoints"><b>Point density</b><small>points across the photo</small></label>
           <select id="oPoints">
             <option value="480">480 &mdash; fast</option>
@@ -92,7 +101,7 @@
             <option value="1280">1280 &mdash; very dense, slow</option>
           </select></div>
 
-        <div class="f"><label for="oDepthStr"><b>Relief</b><small>world units of depth across the subject</small></label>
+        <div class="f"><label for="oDepthStr"><b>Relief</b><small id="oDepthStrHint">world units of depth across the subject</small></label>
           <div class="sliderrow"><input type="range" id="oDepthStr" min="0" max="400" step="5" value="150">
             <span class="v" id="oDepthStrVal">1.50</span></div></div>
 
@@ -121,10 +130,6 @@
           <button class="advhead"><span class="pm">+</span><span>Advanced</span>
             <span class="n"></span></button>
           <div class="advbody">
-            <div class="f"><label><b>Depth model</b></label>
-              <div class="derived"><span class="v">MoGe-2 &mdash; metric</span>
-                <span class="from">the only model in this build</span></div>
-              <input type="hidden" id="oDepthModel" value="moge2"></div>
             <label class="chk"><input type="checkbox" id="oCull" checked>
               <span>Cull points seen from behind the shell</span></label>
 
@@ -372,7 +377,7 @@
             <span class="n"></span></button>
           <div class="advbody">
             <div class="row"><button id="btnAiUp" style="flex:1">Upload your own video</button>
-              <input type="file" id="aiFile" accept="video/mp4" class="hidden">
+              <input type="file" id="aiFile" accept=".mp4,.mov,.webm,.mkv,.m4v,video/mp4,video/quicktime,video/webm,video/x-matroska" class="hidden">
               <button id="btnAuthAlpha" style="flex:1" title="diagnostic only: what the control render actually drew">Render the authored alpha</button></div>
             <button id="btnRetimeAdv" class="wide">Retime to the pose count</button>
           </div>
@@ -425,8 +430,7 @@
         </div>
 
         <div class="actions">
-          <button class="primary" id="btnSplat">Train the splat</button>
-          <button id="btnDataset" title="The identical pipeline, stopping before Brush">Build dataset only</button>
+          <button class="primary" id="btnSplat">Build splat</button>
         </div>
         <div class="status" id="stReport"><div class="cap">Training runs</div></div>
       </div>

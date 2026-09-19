@@ -35,6 +35,7 @@ def health():
             "key_source": falclient.key_source(),
             "brush": config.BRUSH.exists(),
             "sharp": steps.sharp_available(),
+            "da3": steps.da3_available(),
             "endpoint": falclient.ENDPOINT,
             "build": "beta",
             "config": config.summary()}

@@ -25,7 +25,7 @@ the right that previews everything live.
 | Step | What happens |
 |---|---|
 | **1 Source** | Drop a photo. MoGe-2 measures the lens automatically. |
-| **2 Cloud** | The photo is lifted into a metric point cloud (MoGe-2). Clean it up or isolate the subject; it re-lifts as you change settings. |
+| **2 Cloud** | The photo is lifted into a point cloud with the depth model you pick: MoGe-2 (metric, default), Depth Anything V2 Small / Large, or Depth Anything 3 Metric / Mono. Clean it up or isolate the subject; it re-lifts as you change settings. |
 | **3 Shot** | Author the camera orbit (length, sweep, radius, aim height, lens). The server renders a *control video* of the point cloud from exactly those cameras. |
 | **4 Generate** | The control video and your photo go to a fal.ai video model (LTX 2.3, Wan 2.2 VACE, Wan 3.0, MiniMax H3). An approval window shows exactly what will be sent before anything is paid for. |
 | **5 Review** | Watch the clip, cut a matte of the subject (BiRefNet, SAM 2.1, RMBG-1.4, optional MatAnyone), retime if needed, approve. |
@@ -78,8 +78,12 @@ pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorc
 # 2. Everything else
 pip install -r requirements.txt
 
-# 3. Optional: MatAnyone matting and Rerun training telemetry
+# 3. Optional: MatAnyone matting, Rerun training telemetry, Depth Anything 3
 pip install -r requirements-optional.txt
+#    Depth Anything 3 also needs these two, WITHOUT dependencies (its own list
+#    would downgrade numpy and break the environment):
+pip install --no-deps evo==1.37.1
+pip install --no-deps "depth-anything-3 @ git+https://github.com/ByteDance-Seed/Depth-Anything-3@3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
 ```
 
 ## Set up
@@ -152,6 +156,8 @@ licence**. Read them before any commercial use.
 | Model | Used for | Source |
 |---|---|---|
 | MoGe-2 | Depth, point cloud, lens | [microsoft/MoGe](https://github.com/microsoft/MoGe), `Ruicheng/moge-2-vitl-normal` |
+| Depth Anything V2 *(depth option)* | Relative depth | `depth-anything/Depth-Anything-V2-Small-hf` (Apache-2.0), `depth-anything/Depth-Anything-V2-Large-hf`. **Large is non-commercial** (CC-BY-NC-4.0) |
+| Depth Anything 3 *(optional depth option)* | Metric or relative depth | [ByteDance-Seed/Depth-Anything-3](https://github.com/ByteDance-Seed/Depth-Anything-3), `depth-anything/DA3METRIC-LARGE`, `depth-anything/DA3MONO-LARGE` (Apache-2.0) |
 | BiRefNet / BiRefNet-HR | Subject matte | `ZhengPeng7/BiRefNet`, `ZhengPeng7/BiRefNet_HR` |
 | SAM 2.1 + Grounding DINO | Tracked and text-prompted matte | `facebook/sam2.1-hiera-small`, `IDEA-Research/grounding-dino-tiny` |
 | RMBG-1.4 | Fast matte | `briaai/RMBG-1.4` |

@@ -79,14 +79,16 @@ function applyUI(ui) {
         el.value = String(Math.round(+v * 100));
         continue;
       }
-      // MoGe-2 is the only depth model now. Say so once, so a cloud that looks
-      // different on the next lift is not a mystery.
+      // MoGe-2 or Depth Anything V2. A model this build no longer offers
+      // (SHARP) opens as MoGe-2 -- said once, so a cloud that looks different
+      // on the next lift is not a mystery.
       if (id === "oDepthModel") {
-        if (v && v !== "moge2") {
-          logUi(`this project used ${v === "da2" ? "Depth-Anything V2" : String(v).toUpperCase()} `
-              + `— this build lifts with MoGe-2 only, so the next lift will look different`, "warn");
+        const offered = [...el.options].some(o => o.value === String(v));
+        if (v && !offered) {
+          logUi(`this project used ${String(v).toUpperCase()} `
+              + `— not available in this build, so it lifts with MoGe-2 and the next lift will look different`, "warn");
         }
-        el.value = "moge2";
+        el.value = offered ? String(v) : "moge2";
         continue;
       }
       if (el.type === "checkbox") { el.checked = !!v; continue; }
@@ -415,6 +417,7 @@ function envDialog() {
     ["endpoint", S.health.endpoint],
     ["Brush", `${(c.brush || {}).path || "?"} — ${S.health.brush ? "found" : "NOT FOUND"}`],
     ["depth + lens", "MoGe-2"],
+    ["depth (options)", `Depth Anything V2 Small / Large · Depth Anything 3 Metric / Mono — ${S.health.da3 ? "installed" : "DA3 not installed"}`],
     ["projects", (c.projects || {}).path || ""],
     ["python (config)", (c.python || {}).path || ""],
     ["python (running)", (c.python || {}).running || ""],

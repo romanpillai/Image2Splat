@@ -7,3 +7,15 @@ matanyone @ git+https://github.com/pq-yang/MatAnyone@e5ddc534c1fff9bb9e54cf47609
 
 # Live training telemetry in the Rerun viewer (Train -> Advanced).
 rerun-sdk==0.36.3
+
+# Depth Anything 3 (Cloud -> Depth model -> Depth Anything 3 Metric / Mono).
+# The two small packages it imports come from this file:
+omegaconf==2.3.1
+addict==2.4.0
+# DA3 itself, and evo, must be installed SEPARATELY and WITHOUT dependencies:
+# DA3's own list pins numpy<2 and pulls in open3d, moviepy 1.x and a pinned
+# gsplat, which would break this environment. Depth-only inference needs none
+# of them.
+#   pip install --no-deps evo==1.37.1
+#   pip install --no-deps "depth-anything-3 @ git+https://github.com/ByteDance-Seed/Depth-Anything-3@3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
+# Models used (Apache-2.0): depth-anything/DA3METRIC-LARGE, depth-anything/DA3MONO-LARGE

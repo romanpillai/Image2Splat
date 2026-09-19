@@ -47,7 +47,7 @@ class OrbitReq(BaseModel):
     depth: bool = False          # depth-displaced point cloud instead of card
     depth_strength: float = 1.5  # world-units of relief across the depth range
     backface_cull: bool = True   # hide points seen from behind the shell
-    depth_model: str = "moge2"   # MoGe-2 only in this build (metric meters)
+    depth_model: str = "moge2"   # see steps.DEPTH_MODELS: moge2 | da2 | da2-large | da3-metric | da3-mono
     fps: int = 24                # playback speed; poses are unchanged, only how fast they run
     points_w: int = 640          # depth-cloud sampling width; point count scales with its square
     # Composing the lifted cloud:

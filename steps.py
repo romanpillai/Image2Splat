@@ -1497,11 +1497,11 @@ def _depth_model(size: str = "small", device: str = "cpu"):
     return _DEPTH_MODEL
 
 
-def estimate_depth(img_bgr: np.ndarray) -> np.ndarray:
+def estimate_depth(img_bgr: np.ndarray, size: str = "small") -> np.ndarray:
     """Relative depth map at image resolution. Larger value = closer."""
     import torch
     from PIL import Image
-    mod, proc, _dev, _ = _depth_model()
+    mod, proc, _dev, _ = _depth_model(size)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     mod = mod.to(dev)
     pil = Image.fromarray(img_bgr[..., ::-1])
@@ -1532,7 +1532,122 @@ FAR_DOME_RADII = 6.0
 # Depth engines that return real meters, and so go through the metric lift
 # (subject anchored to the card plane, far field tanh-compressed) rather than
 # the percentile-normalised relative path.
-METRIC_MODELS = ("moge2", "sharp")
+METRIC_MODELS = ("moge2", "sharp", "da3-metric")
+
+# The depth models the author workspace offers, by the id the client sends.
+#   moge2, da3-metric -- metric: through the anchored metric lift.
+#   da2, da2-large, da3-mono -- relative: through the percentile-normalised
+#     path in depth_cloud_points, where relief is world units across the photo.
+# Licences: Depth Anything V2 Small, DA3 Metric-Large and DA3 Mono-Large are
+# Apache-2.0; V2 Base and Large are CC-BY-NC-4.0, which is why V2 Large is
+# labelled non-commercial in the UI.
+DEPTH_MODELS = {
+    "moge2": "MoGe-2",
+    "da2": "Depth Anything V2 Small",
+    "da2-large": "Depth Anything V2 Large",
+    "da3-metric": "Depth Anything 3 Metric Large",
+    "da3-mono": "Depth Anything 3 Mono Large",
+}
+_DA2_SIZE = {"da2": "small", "da2-large": "large"}
+DA3_TAGS = {"da3-metric": "depth-anything/DA3METRIC-LARGE",
+            "da3-mono": "depth-anything/DA3MONO-LARGE"}
+# Longest side DA3 runs at (rounded to its 14 px patch). 1008 measured 0.4 s
+# and a 3.2 GB peak on the 5070; the default 504 loses fine relief.
+DA3_RES = 1008
+DA3_VRAM_BYTES = 4.5e9
+_DA3_MODEL = None
+
+
+def da3_available() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("depth_anything_3") is not None
+
+
+def _da3_model(tag: str):
+    """Depth Anything 3 (ByteDance Seed), held on the CPU between calls.
+
+    DA3's api module imports its export tools -- moviepy 1.x, open3d, a
+    pinned gsplat -- at load time, and pins numpy<2. A depth-only lift never
+    exports, so it is installed with --no-deps and, when those tools are
+    missing, the export module is replaced by a placeholder that refuses.
+    """
+    global _DA3_MODEL
+    if _DA3_MODEL is not None and _DA3_MODEL[1] == tag:
+        return _DA3_MODEL[0]
+    if not da3_available():
+        raise RuntimeError("Depth Anything 3 is not installed - see "
+                           "requirements-optional.txt, or pick another depth model")
+    import importlib
+    import sys
+    import types
+    name = "depth_anything_3.utils.export"
+    if name not in sys.modules:
+        try:
+            importlib.import_module(name)
+        except Exception:
+            stub = types.ModuleType(name)
+
+            def _no_export(*a, **k):
+                raise RuntimeError("DA3 export is not available in this build")
+            stub.export = _no_export
+            sys.modules[name] = stub
+    from depth_anything_3.api import DepthAnything3
+    _DA3_MODEL = None                 # drop the other size before loading
+    _DA3_MODEL = (DepthAnything3.from_pretrained(tag).eval(), tag)
+    return _DA3_MODEL[0]
+
+
+def estimate_depth_da3(src: Path, img_bgr: np.ndarray, model: str, log=None):
+    """Depth Anything 3. Returns (depth, valid) at image resolution.
+
+    da3-metric: DA3METRIC-LARGE's output is metric once multiplied by
+    focal/300 (focal in pixels at the size it ran at). The measured lens is
+    used for that; the lift anchors the subject to the card plane, so the
+    scale only sets the meters in the log, never the geometry.
+    da3-mono: DA3MONO-LARGE, relative DEPTH (larger = farther) -- not
+    disparity like V2. valid is False where DA3 sees sky.
+    """
+    import torch
+    m = _da3_model(DA3_TAGS[model])
+    dev = "cpu"
+    if torch.cuda.is_available():
+        free, _ = torch.cuda.mem_get_info()
+        if free > DA3_VRAM_BYTES:
+            dev = "cuda"
+        elif log:
+            log(f"depth: only {free / 1e9:.1f} GB of VRAM free - Depth Anything 3 "
+                f"runs on the CPU, which is slow")
+    m = m.to(dev)
+    try:
+        p = m.inference([np.ascontiguousarray(img_bgr[..., ::-1])],
+                        process_res=DA3_RES)
+    finally:
+        if dev == "cuda":
+            m.to("cpu")
+            torch.cuda.empty_cache()
+    ih, iw = img_bgr.shape[:2]
+    raw = p.depth[0].astype(np.float32)
+    ph, pw = raw.shape
+    depth = cv2.resize(raw, (iw, ih), interpolation=cv2.INTER_LINEAR)
+    valid = depth > 1e-6
+    if p.sky is not None:
+        sky = cv2.resize(p.sky[0].astype(np.float32), (iw, ih),
+                         interpolation=cv2.INTER_LINEAR)
+        valid &= sky < 0.3            # DA3's own non-sky threshold
+    if model == "da3-metric":
+        f_px, _ = _source_focal_px(Path(src), iw, ih, None)
+        if f_px > 0:
+            depth = depth * (f_px * (pw / iw) / 300.0)
+        elif log:
+            log("depth: no measured lens - DA3 metric depth is in relative "
+                "units until the lens is measured (the lift is unaffected)")
+    return depth, valid
+
+
+def depth_model_id(value) -> str:
+    """A depth model id this build can run; anything else falls back to MoGe-2."""
+    v = str(value or "").strip().lower()
+    return v if v in DEPTH_MODELS else "moge2"
 
 
 def _moge_model():
@@ -1553,52 +1668,78 @@ _DEPTH_MEM: dict = {}
 
 
 def _depth_metric_cached(src: Path, bgr: np.ndarray, log=None):
-    """MoGe-2 depth for THIS source file: memory, then disk, then the model.
+    """MoGe-2 depth for THIS source file -- see _depth_cached."""
+    return _depth_cached(src, bgr, "moge2", log=log)
 
-    MoGe's output depends on the pixels alone, so it is keyed by the file's
-    modification time and size. Every relift used to re-run the network --
-    seconds of GPU per slider release -- and a server restart threw the result
-    away. The disk copy lives in <project>/cache/ and a new upload changes the
-    key, so a stale depth map can never be read back for a different photo.
+
+def _depth_cached(src: Path, bgr: np.ndarray, model: str, log=None):
+    """Depth for THIS source file and model: memory, then disk, then the model.
+
+    Returns (depth, valid). valid is None for Depth Anything, which has no
+    sky mask. Every model's output depends on the pixels alone, so it is keyed
+    by the file's modification time and size. Every relift used to re-run the
+    network -- seconds of GPU per slider release -- and a server restart threw
+    the result away. The disk copy lives in <project>/cache/depth_<model>.npz
+    and a new upload changes the key, so a stale depth map can never be read
+    back for a different photo.
     """
+    model = depth_model_id(model)
+    name = DEPTH_MODELS[model]
+
+    def compute():
+        if model == "moge2":
+            return estimate_depth_metric(bgr)
+        if log:
+            log(f"depth: {name} on {Path(src).name}")
+        if model in DA3_TAGS:
+            return estimate_depth_da3(src, bgr, model, log=log)
+        return estimate_depth(bgr, _DA2_SIZE[model]), None
+
     src = Path(src)
     try:
         stt = src.stat()
-        key = f"{src.name}|{stt.st_mtime_ns}|{stt.st_size}|moge2"
+        key = f"{src.name}|{stt.st_mtime_ns}|{stt.st_size}|{model}"
     except OSError:
-        return estimate_depth_metric(bgr)
-    hit = _DEPTH_MEM.get(str(src.resolve()))
+        return compute()
+    mem = f"{src.resolve()}|{model}"
+    hit = _DEPTH_MEM.get(mem)
     if hit and hit[0] == key:
         return hit[1], hit[2]
-    disk = src.parent / "cache" / "depth_moge2.npz"
+
+    def remember(depth, valid):
+        # a few entries, so flipping between models on one photo is instant
+        while len(_DEPTH_MEM) >= 4:
+            _DEPTH_MEM.pop(next(iter(_DEPTH_MEM)))
+        _DEPTH_MEM[mem] = (key, depth, valid)
+
+    disk = src.parent / "cache" / f"depth_{model}.npz"
     if disk.exists():
         try:
             z = np.load(disk, allow_pickle=False)
             if str(z["key"]) == key:
-                depth, valid = z["depth"], z["valid"].astype(bool)
-                _DEPTH_MEM.clear()
-                _DEPTH_MEM[str(src.resolve())] = (key, depth, valid)
+                depth = z["depth"]
+                valid = z["valid"].astype(bool) if "valid" in z.files else None
+                remember(depth, valid)
                 if log:
-                    log(f"depth: MoGe-2 depth read from the cache  @ {disk.resolve()}")
+                    log(f"depth: {name} depth read from the cache  @ {disk.resolve()}")
                 return depth, valid
         except Exception:
             pass                          # unreadable cache: recompute below
-    depth, valid = estimate_depth_metric(bgr)
+    depth, valid = compute()
     try:
         disk.parent.mkdir(parents=True, exist_ok=True)
-        tmp = disk.with_name("depth_moge2.tmp.npz")
+        tmp = disk.with_name(f"depth_{model}.tmp.npz")
+        extra = {} if valid is None else {"valid": valid.astype(np.uint8)}
         np.savez_compressed(tmp, key=np.array(key),
-                            depth=depth.astype(np.float32),
-                            valid=valid.astype(np.uint8))
+                            depth=depth.astype(np.float32), **extra)
         os.replace(tmp, disk)
         if log:
-            log(f"file: wrote cache/{disk.name} (MoGe-2 depth, "
+            log(f"file: wrote cache/{disk.name} ({name} depth, "
                 f"{disk.stat().st_size / 1e6:.2f} MB)  @ {disk.resolve()}")
     except Exception as e:
         if log:
             log(f"depth: could not write the depth cache ({e})")
-    _DEPTH_MEM.clear()
-    _DEPTH_MEM[str(src.resolve())] = (key, depth, valid)
+    remember(depth, valid)
     return depth, valid
 
 
@@ -1652,7 +1793,7 @@ def free_vram(log=None) -> dict:
     before = 0.0
     if torch.cuda.is_available():
         before = torch.cuda.memory_reserved() / 1e9
-    for holder in ("_DEPTH_MODEL", "_MOGE_MODEL", "_SHARP_MODEL"):
+    for holder in ("_DEPTH_MODEL", "_MOGE_MODEL", "_SHARP_MODEL", "_DA3_MODEL"):
         obj = globals().get(holder)
         if obj is None:
             continue
@@ -2080,15 +2221,17 @@ def depth_cloud_points(src: Path, orbit: Orbit, card_height: float,
     Shared by the control-video renderer and the live viewport preview, so what
     you see live is the same cloud the video is rendered from.
 
-    Two depth engines:
+    Two kinds of depth engine:
 
-      da2   -- Depth-Anything-V2. RELATIVE inverse depth, percentile
+      da2, da2-large, da3-mono -- Depth Anything V2 Small / Large (inverse
+               depth) and Depth Anything 3 Mono (depth). RELATIVE, percentile
                normalised, so depth_strength is world units of relief across
                the whole image. Fine for an isolated subject; it squashes a
                real environment into a thin shell, because scale and shift are
                both unknown and the normalisation throws the range away.
 
-      moge2 -- MoGe-2. METRIC meters. The subject's median depth is anchored to
+      moge2, da3-metric -- MoGe-2 / Depth Anything 3 Metric. METRIC meters
+               (DA3 via the measured lens). The subject's median depth is anchored to
                the card plane and everything else keeps its true proportion
                around it, so a character at 5 m and trees at 60 m end up
                twelve times further out instead of side by side. The far field
@@ -2127,7 +2270,7 @@ def depth_cloud_points(src: Path, orbit: Orbit, card_height: float,
                 + f" at {iw}x{ih}")
         depth, valid = (estimate_depth_sharp(bgr, f_px=f_px, log=log)
                         if depth_model == "sharp"
-                        else _depth_metric_cached(src, bgr, log=log))
+                        else _depth_cached(src, bgr, depth_model, log=log))
         # Fill sky with a large finite depth BEFORE resizing: area averaging
         # over a NaN/zero sky would bleed near-camera depth into the skyline
         # and tear the silhouette apart.
@@ -2135,9 +2278,15 @@ def depth_cloud_points(src: Path, orbit: Orbit, card_height: float,
                     if valid.any() else 1e4)
         depth = depth.copy()
         depth[~valid] = far_fill
+    elif depth_model in _DA2_SIZE:
+        depth, valid = _depth_cached(src, bgr, depth_model, log=log)
+    elif depth_model == "da3-mono":
+        # DA3 Mono is depth (larger = farther); this path wants larger = closer
+        depth, valid = _depth_cached(src, bgr, depth_model, log=log)
+        depth = -depth
     else:
-        depth = estimate_depth(bgr)
-        valid = None
+        raise RuntimeError(f"unknown depth model {depth_model!r} - "
+                           f"choose one of {', '.join(DEPTH_MODELS)}")
 
     # Resample the sampling grid UP as well as down. Downsampling caps cost;
     # upsampling matters because the cloud's speckle is a SAMPLING gap, not a
@@ -2326,7 +2475,7 @@ def cloud_packed(src: Path, orbit: Orbit, card_height: float,
                  max_points_w: int = 288,
                  isolate_prune: float = 0.0,
                  ground_level: float = 0.0,
-                 crop_sphere: tuple = None) -> bytes:
+                 crop_sphere: tuple = None, log=None) -> bytes:
     """The lift, packed for the browser viewport.
 
     Strength is baked at 1.0; each point ships its card-plane position, its
@@ -2340,7 +2489,8 @@ def cloud_packed(src: Path, orbit: Orbit, card_height: float,
         src, orbit, card_height, feet_frac, 1.0, clay_mode="off",
         max_points_w=max_points_w, with_normals=False,
         depth_model=depth_model, isolate_prune=isolate_prune,
-        ground_level=ground_level, crop_sphere=crop_sphere, with_rays=True)
+        ground_level=ground_level, crop_sphere=crop_sphere, with_rays=True,
+        log=log)
     # Trailing header: camera-0 origin and the bend's distance range, so the
     # vertex shader evaluates exactly the expression bend_scene() does.
     a0 = orbit.ray_angle()

@@ -9,6 +9,10 @@ GeoCalib is gone from this build. The camera is front-on at elevation 0 and
 the canvas matches the photo, so a pitch/roll measurement has nothing left to
 drive; MoGe-2 measures the lens and lifts the cloud. calib.py stays on disk,
 unused, and an old project's saved `calib` block is simply ignored.
+
+MoGe-2 always measures the lens. The lift itself can use MoGe-2 or Depth
+Anything 3 Metric (metric), or Depth Anything V2 / 3 Mono (relative), per
+steps.DEPTH_MODELS.
 """
 from __future__ import annotations
 
@@ -59,20 +63,25 @@ def cloud(r: CloudReq):
         return JSONResponse({"error": "no source image"}, status_code=400)
     orbit = steps.orbit_from_dict({**(load_state(d).get("orbit") or {}),
                                    **r.orbit})
+    model = steps.depth_model_id(r.depth_model)
+    if model != (r.depth_model or "").strip().lower():
+        _log(f"cloud: depth model {r.depth_model!r} is not available in this "
+             f"build - lifting with MoGe-2", level="warn", source="cloud")
     t0 = time.time()
     try:
         data = steps.cloud_packed(srcs[0], orbit, r.card_height,
-                                  depth_model="moge2",
+                                  depth_model=model,
                                   # same ceiling as the render: the viewport is
                                   # meant to predict it, not approximate it
                                   max_points_w=max(96, min(2048, r.points_w)),
                                   isolate_prune=r.isolate_prune,
                                   ground_level=0.0,
-                                  crop_sphere=_crop(r.crop_sphere))
+                                  crop_sphere=_crop(r.crop_sphere),
+                                  log=lambda m: _log(m, source="cloud"))
     except RuntimeError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     _log(f"cloud: packed {len(data) / 1e6:.2f} MB for the viewport from "
-         f"{srcs[0].name} (moge2, width {r.points_w}) in "
+         f"{srcs[0].name} ({steps.DEPTH_MODELS[model]}, width {r.points_w}) in "
          f"{time.time() - t0:.1f}s", source="cloud")
     try:
         (d / CLOUD_BIN).write_bytes(data)
@@ -150,7 +159,8 @@ def measure_fov(p: NewProject):
 
 @router.post("/api/orbit")
 def do_orbit(r: OrbitReq):
-    rx("/api/orbit", r.project, clay=r.clay, depth_model="moge2",
+    model = steps.depth_model_id(r.depth_model)
+    rx("/api/orbit", r.project, clay=r.clay, depth_model=model,
        depth_strength=r.depth_strength, fps=r.fps, points_w=r.points_w,
        auto_fit=r.auto_fit, card_height=r.card_height,
        soften=f"{r.soften_downsample:g}x blur {r.soften_blur:g}",
@@ -202,8 +212,11 @@ def do_orbit(r: OrbitReq):
             raise RuntimeError(
                 "no source image in this project - re-upload it")
         progress(phase="lifting points")
-        _log(f"orbit: DEPTH CLOUD from {srcs[0].name} via MOGE2, strength "
-             f"{r.depth_strength} x metric scale, clay={r.clay}, "
+        _log(f"orbit: DEPTH CLOUD from {srcs[0].name} via "
+             f"{steps.DEPTH_MODELS[model]}, strength {r.depth_strength}"
+             + (" x metric scale" if model in steps.METRIC_MODELS
+                else " world units of relief")
+             + f", clay={r.clay}, "
              f"{orbit.frames} frames, canvas {orbit.width}x{orbit.height}")
         _io("reading", srcs[0], note="source photo, lifted to a point cloud")
 
@@ -214,7 +227,7 @@ def do_orbit(r: OrbitReq):
             srcs[0], orbit, d / "control_frames", card_height=card_h,
             feet_frac=feet_frac, depth_strength=r.depth_strength,
             backdrop=r.backdrop, clay_mode=r.clay,
-            backface_cull=r.backface_cull, depth_model="moge2",
+            backface_cull=r.backface_cull, depth_model=model,
             max_points_w=max(160, min(2048, r.points_w)),
             depth_cutoff=r.depth_cutoff,
             isolate_prune=r.isolate_prune,
@@ -232,7 +245,7 @@ def do_orbit(r: OrbitReq):
             _log(f"orbit: isolated-point cleanup dropped "
                  f"{info['pruned_points']:,} points with no neighbours")
         if info.get("anchor_depth_m"):
-            _log(f"orbit: MoGe-2 metric, subject median depth "
+            _log(f"orbit: {steps.DEPTH_MODELS[model]} metric, subject median depth "
                  f"{info['anchor_depth_m']} m anchored to the card plane")
         _io("rendered", srcs[0], d / "control.mp4",
             note=f"{orbit.frames} frames at {r.fps} fps - kept on disk as the "

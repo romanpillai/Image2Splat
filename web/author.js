@@ -143,7 +143,7 @@ export function cropSphere() {
 function liftKey() {
   const p = orbitParams();
   return JSON.stringify({
-    pts: $("oPoints").value, model: "moge2",
+    pts: $("oPoints").value, model: depthModelNow(),
     prune: num("cPrune", 0), crop: cropSphere(),
     radius: p.radius, aim: p.aim_z, card: p.card_height,
   });
@@ -260,6 +260,18 @@ const engineNow = () => (S.engines || []).find(e => e.id === $("gEngine").value)
 /** Relief in world units, from the slider (0-400 -> 0.00-4.00). */
 function reliefNow() { return num("oDepthStr", 150) / 100; }
 
+/** The lift's depth model. MoGe-2 and DA3 Metric are metric; Depth Anything
+ *  V2 and DA3 Mono are relative, so their relief is world units across the
+ *  photo. MoGe-2 measures the lens either way. */
+const DEPTH_NAMES = { moge2: "MoGe-2", da2: "Depth Anything V2 Small", "da2-large": "Depth Anything V2 Large",
+                      "da3-metric": "Depth Anything 3 Metric Large", "da3-mono": "Depth Anything 3 Mono Large" };
+const DEPTH_METRIC = new Set(["moge2", "da3-metric"]);
+const DEPTH_DOWNLOAD = { "da2-large": "non-commercial licence · 1.3 GB download on first use",
+                         "da3-metric": "1.4 GB download on first use", "da3-mono": "1.4 GB download on first use" };
+function depthModelNow() { const v = $("oDepthModel").value; return DEPTH_NAMES[v] ? v : "moge2"; }
+const depthNameNow = () => DEPTH_NAMES[depthModelNow()];
+const depthMetricNow = () => DEPTH_METRIC.has(depthModelNow());
+
 /** Give the card a size, once, and then leave it alone. The server's number
  *  (what control.mp4 was rendered with) wins unless you moved it yourself. */
 function seedCard() {
@@ -369,7 +381,11 @@ function statusCloud() {
         ? `Only ${cloudPoints.toLocaleString()} points inside the isolate sphere — widen it or move it onto the subject.`
         : `Sparse for a ${dn.w}×${dn.h} clip — raise point density or soften more.` });
   }
-  rows.push({ k: "depth model", v: "MoGe-2 — metric" });
+  const da3Missing = depthModelNow().startsWith("da3") && S.health && S.health.da3 === false;
+  rows.push({ k: "depth model", v: `${depthNameNow()} — ${depthMetricNow() ? "metric" : "relative"}`,
+    problem: da3Missing,
+    from: da3Missing ? "Depth Anything 3 is not installed — see requirements-optional.txt"
+                     : (DEPTH_DOWNLOAD[depthModelNow()] || "") });
   rows.push({ k: "isolate", v: c ? `r ${c[3].toFixed(2)} about (${c[0].toFixed(2)}, ${c[1].toFixed(2)}, ${c[2].toFixed(2)})` : "off" });
   rows.push({ k: "depth cutoff", v: cutoffFromSlider(num("cCut", 0)) > 0
       ? `${cutoffFromSlider(num("cCut", 0)).toFixed(2)} behind the card` : "off" });
@@ -588,7 +604,8 @@ function statusReview() {
   let probs = 0;
 
   if (!st.ai_video) {
-    rows.push({ k: "", note: true, problem: true, v: "No clip yet — generate one in step 4." });
+    rows.push({ k: "", note: true, problem: true, v: "No clip yet — generate one in step 4, or upload your own.",
+      fix: { label: "Upload your own video", onClick: () => $("aiFile").click() } });
     probs++;
   }
   if (st.ai_video && n && poses && n !== poses) {
@@ -611,7 +628,8 @@ function statusReview() {
   }
 
   rows.push({ k: "clip", v: st.ai_video || "—" });
-  rows.push({ k: "engine", v: st.fal_engine || st.ai_engine || "—" });
+  rows.push({ k: "engine", v: st.ai_engine === "upload" ? "your own video (uploaded)"
+                                                     : (st.fal_engine || st.ai_engine || "—") });
   rows.push({ k: "frames / poses", v: st.ai_video ? `${n || "?"} / ${poses}` : "—" });
   rows.push({ k: "retimed", v: st.ai_retimed ? "yes" : "no" });
   rows.push({ k: "retime", v: "last resort — see Advanced" });
@@ -683,9 +701,7 @@ function statusTrain() {
   rows.push({ k: "checkpoints", v: ckList.length ? `${ckList.length} on disk` : "none yet" });
   rows.push({ k: "steps", v: `${num("sSteps", 50000).toLocaleString()}` });
   renderStatusFolded("stTrain", "Train", rows, "training setup");
-  gate("btnSplat", probs, "Train the splat");
-  const ds = $("btnDataset");
-  if (!fx.btnTransient(ds)) ds.disabled = probs > 0;
+  gate("btnSplat", probs, "Build splat");
   return probs;
 }
 
@@ -782,6 +798,11 @@ export function repaintNow() {
     $("cCutVal").textContent = cutoffFromSlider(num("cCut", 0)) > 0
       ? cutoffFromSlider(num("cCut", 0)).toFixed(2) : "off";
     $("oDepthStrVal").textContent = reliefNow().toFixed(2);
+    $("oDepthStrHint").textContent = depthMetricNow()
+      ? "world units of depth across the subject" : "world units of relief across the photo (relative depth)";
+    for (const o of $("oDepthModel").options) {
+      if (o.value.startsWith("da3")) o.disabled = !!(S.health && S.health.da3 === false);
+    }
     $("cPruneVal").textContent = num("cPrune", 0) > 0 ? num("cPrune", 0) + "%" : "off";
     $("vStepsVal").textContent = num("vSteps", 30);
     $("vGuideVal").textContent = (num("vGuide", 50) / 10).toFixed(1);
@@ -979,9 +1000,9 @@ async function liftCloud({ why = "", chain = false, final = "" } = {}) {
   const said = { "settings changed": "your change", "before rendering": "before the render",
                  "new photo": "the new photo", "Regenerate": "" }[why] ?? why;
   const tok = own ? jobStart({ title: cloudPoints ? "Re-lifting the points" : "Lifting the points",
-                               detail: `MoGe-2 · ${pts} points across${said ? ` · for ${said}` : ""}`,
+                               detail: `${depthNameNow()} · ${pts} points across${said ? ` · for ${said}` : ""}`,
                                kind: "client", stage: "lift", compact: !final }) : 0;
-  logUi(`lift: ${pts}px wide via MoGe-2${why ? ` — ${why}` : ""}`);
+  logUi(`lift: ${pts}px wide via ${depthNameNow()}${why ? ` — ${why}` : ""}`);
   const t0 = performance.now();
   let buf;
   try {
@@ -989,7 +1010,7 @@ async function liftCloud({ why = "", chain = false, final = "" } = {}) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         project: S.project, orbit: p, card_height: p.card_height,
-        depth_strength: reliefNow(), depth_model: "moge2", clay: "off", frame: 0,
+        depth_strength: reliefNow(), depth_model: depthModelNow(), clay: "off", frame: 0,
         depth_cutoff: 0, isolate_prune: num("cPrune", 0) / 100,
         crop_sphere: cropSphere(),
         subject_x: num("sX", 0), subject_y: num("sY", 0), subject_z: num("sZ", 0),
@@ -1109,7 +1130,7 @@ async function renderControl({ btn = null, chain = false } = {}) {
     project: S.project, orbit: p, card_height: p.card_height,
     auto_fit: $("oFit").checked, clay: $("oClay").value, backdrop: "grey",
     depth: true, depth_strength: reliefNow(),
-    backface_cull: $("oCull").checked, depth_model: "moge2",
+    backface_cull: $("oCull").checked, depth_model: depthModelNow(),
     fps: fpsNow(), points_w: +$("oPoints").value,
     depth_cutoff: cutoffFromSlider(num("cCut", 0)),
     isolate_prune: num("cPrune", 0) / 100,
@@ -1223,18 +1244,18 @@ async function trainSplat(datasetOnly, btn) {
   if (btn) fx.btnRestore(btn);
   const total = num("sSteps", 50000);
   apvShow(plan, {
-    title: datasetOnly ? "Build the COLMAP dataset only" : "Train the splat",
+    title: datasetOnly ? "Build the COLMAP dataset only" : "Build the splat",
     subtitle: `Brush: ${esc(plan.brush)}${plan.brush_found ? "" : " — NOT FOUND"}`,
-    goLabel: datasetOnly ? "Build the dataset" : "Approve & train",
+    goLabel: datasetOnly ? "Build the dataset" : "Approve & build",
     settingsHtml: settingsHtml(plan.settings),
     onApprove: () => runDetached(
-      datasetOnly ? "build the dataset" : "train the splat",
+      datasetOnly ? "build the dataset" : "build the splat",
       () => api("/api/splat", body), {
         btn, stage: "splat", busy: "Starting…",
         busyRunning: datasetOnly ? "Building…" : "Training…",
-        working: datasetOnly ? "Building the dataset" : "Training the splat",
-        ok: datasetOnly ? "Dataset built" : "Splat trained",
-        okBtn: datasetOnly ? "Built" : "Trained",
+        working: datasetOnly ? "Building the dataset" : "Building the splat",
+        ok: datasetOnly ? "Dataset built" : "Splat built",
+        okBtn: "Built",
         detailFn: datasetOnly ? null : (st => {
           const last = (S.splats.exports || []).slice(-1)[0];
           if (!last || !last.step) return { detail: String(st.msg || "preparing the dataset…").slice(0, 110) };
@@ -1244,6 +1265,7 @@ async function trainSplat(datasetOnly, btn) {
       }),
   });
 }
+
 
 // ============================================================ checkpoints ===
 export async function refreshCheckpoints() {
@@ -1511,6 +1533,12 @@ export function init() {
   // the cleaned cloud without a button press.
   onUserChange(["cCropOn", "cCropX", "cCropY", "cCropZ", "cCropR", "cPrune", "oPoints"],
                () => reliftSoon());
+  // A different depth model is a different cloud: re-lift straight away.
+  onUserChange(["oDepthModel"], () => {
+    logUi(`depth model → ${depthNameNow()}`
+        + (depthMetricNow() ? " (metric)" : " (relative — relief is world units across the photo)"));
+    reliftSoon(150);
+  });
   // The lift is made from camera 0's rays, so moving that camera changes it.
   onUserChange(["oRad", "oRad_r", "oAimZ", "oAimZ_r", "oCard"], () => reliftSoon(700));
 
@@ -1601,10 +1629,12 @@ export function init() {
     e.target.value = "";
     if (!f) return;
     const b = $("btnAiUp");
+    const ext = (f.name.includes(".") ? f.name.split(".").pop() : "mp4").toLowerCase();
     fx.btnBusy(b, "Uploading…");
-    logUi(`uploading ${f.name} as the AI video`);
+    logUi(`uploading ${f.name} (${(f.size / 1e6).toFixed(2)} MB) as the AI video`
+        + (ext !== "mp4" ? ` — the server converts .${ext} to mp4` : ""));
     try {
-      const j = await apiRaw(`/api/ai_upload?project=${encodeURIComponent(S.project)}&ext=mp4`, f);
+      const j = await apiRaw(`/api/ai_upload?project=${encodeURIComponent(S.project)}&ext=${encodeURIComponent(ext)}`, f);
       logUi(`AI video is now ${S.state._dir}\\${j.ai_video} — ${j.frames} frames at ${j.fps} fps `
           + `against ${j.poses} poses (${j.matches ? "matches" : "DOES NOT MATCH"})`,
           j.matches ? "info" : "warn");
@@ -1646,7 +1676,7 @@ export function init() {
 
   // ---- train
   $("btnSplat").onclick = () => trainSplat(false, $("btnSplat")).catch(e => logUi(e.message, "error"));
-  $("btnDataset").onclick = () => trainSplat(true, $("btnDataset")).catch(e => logUi(e.message, "error"));
+  };
   $("btnSplatUp").onclick = () => $("splatFile").click();
   $("splatFile").onchange = async e => {
     const f = e.target.files[0];
