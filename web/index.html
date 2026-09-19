@@ -384,57 +384,10 @@
         </div>
 
         <div class="row"><button id="btnRetry" style="flex:1">Retry &mdash; reset this stage</button></div>
-        <button class="primary" id="btnApprove">Approve this clip</button>
+        <button class="primary wide" id="btnDataset">Build Dataset</button>
       </div>
     </div>
 
-    <!-- ----------------------------------------------------- 6 Train --- -->
-    <div class="step" id="stepTrain" data-step="6">
-      <div class="head" role="button" tabindex="0"><span class="num">6</span><span class="title">Train</span>
-        <span class="needs"></span><span class="caret" aria-hidden="true"></span></div>
-      <div class="body">
-        <div class="f"><label for="sSteps"><b>Training steps</b><small>quality measured to peak near 15,000</small></label>
-          <input type="number" id="sSteps" step="1000" value="50000">
-          <span class="help">Past ~15,000 Brush stops creating splats and the optimiser can only stretch what it has.</span></div>
-
-        <div class="status" id="stTrain"><div class="cap">Train</div></div>
-
-        <div class="adv" data-adv="train">
-          <button class="advhead"><span class="pm">+</span><span>Advanced</span>
-            <span class="n"></span></button>
-          <div class="advbody">
-            <div class="grid2">
-              <div class="f"><label for="sDetail"><b>Detail preset</b></label>
-                <select id="sDetail">
-                  <option value="stock" selected>stock &mdash; Brush defaults</option>
-                  <option value="broad">broad</option><option value="balanced">balanced</option>
-                  <option value="quality">quality</option><option value="fine">fine</option>
-                </select></div>
-              <div class="f"><label for="sSH"><b>SH degree</b></label>
-                <input type="number" id="sSH" min="0" max="3" step="1" value="3"></div>
-            </div>
-            <span class="help">The tuned presets measured worse than stock. Use deliberately.</span>
-            <label class="chk"><input type="checkbox" id="sClean"><span>Prune and de-needle after training</span></label>
-            <label class="chk"><input type="checkbox" id="sRerun"><span>Live Rerun telemetry</span></label>
-            <div class="grid2" id="rerunOpts">
-              <div class="f"><label for="sRrStats"><b>Stats every</b><small>steps</small></label>
-                <input type="number" id="sRrStats" step="10" value="50"></div>
-              <div class="f"><label for="sRrSplats"><b>Splat cloud every</b><small>0 = never</small></label>
-                <input type="number" id="sRrSplats" step="100" value="0"></div>
-            </div>
-            <div class="row"><button id="btnRerunOpen" style="flex:1">Open the Rerun viewer</button>
-              <button id="btnSplatUp" style="flex:1">Upload a .ply</button>
-              <input type="file" id="splatFile" accept=".ply" class="hidden"></div>
-            <span class="help" id="rerunHint"></span>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="primary" id="btnSplat">Build splat</button>
-        </div>
-        <div class="status" id="stReport"><div class="cap">Training runs</div></div>
-      </div>
-    </div>
 
   </div><!-- /rail -->
 

@@ -128,7 +128,6 @@ const NEEDS = [
   { id: "stepShot", need: () => S.state.source ? "" : "needs a photo" },
   { id: "stepGen", need: () => S.state.control_video ? "" : "needs a control video" },
   { id: "stepReview", need: () => S.state.ai_video ? "" : "needs a generated clip" },
-  { id: "stepTrain", need: () => S.state.approved ? "" : "needs an approved clip" },
 ];
 
 let openedFor = null, paOpenedFor = null;
@@ -153,9 +152,9 @@ function setSteps() {
   let reached = 1;
   if (S.state.source) reached = 3;
   if (S.state.control_video) reached = 4;
+  // Review is the last step: the dataset it builds is the deliverable, and
+  // Brush is where it goes next.
   if (S.state.ai_video) reached = 5;
-  if (S.state.approved) reached = 6;
-  if (S.state.splat) reached = 6;
   for (let i = 1; i < NEEDS.length; i++) {
     const spec = NEEDS[i];
     const el = $(spec.id);

@@ -617,7 +617,7 @@ function statusReview() {
   const pick = $("uAlpha").value;
   const m = mattes[pick];
   if (!m && st.ai_video && pick && pick !== "authored" && pick !== "distance") {
-    rows.push({ k: "", note: true, problem: true, v: "Matte not cut yet — needed before training",
+    rows.push({ k: "", note: true, problem: true, v: "Matte not cut yet — the dataset needs it",
       fix: { label: "Run the matte", onClick: () => $("btnAiRmbg").click() } });
     probs++;
   }
@@ -638,10 +638,13 @@ function statusReview() {
     rows.push({ k: "coverage", v: `${(100 * m.coverage).toFixed(1)}%` });
     rows.push({ k: "ambiguous edge", v: `${(100 * m.ambiguous).toFixed(2)}%` });
   }
-  rows.push({ k: "approved", v: st.approved ? "yes" : "no" });
+  rows.push({ k: "dataset", v: st.dataset_time ? "built" : "not built yet" });
 
   renderStatusFolded("stReview", "Review", rows, "review details");
-  gate("btnApprove", probs, st.approved ? "Approve again" : "Approve this clip");
+  // Plainly disabled until the matte is cut: the rows above already say why,
+  // and the button carries no count or verb of its own.
+  const dsBtn = $("btnDataset");
+  if (dsBtn && !fx.btnTransient(dsBtn)) dsBtn.disabled = probs > 0;
 
   // The clip plays inline in this step. It should not be behind a button.
   const box = $("aiClipBox");
@@ -660,65 +663,6 @@ function statusReview() {
   return probs;
 }
 
-function statusTrain() {
-  const st = S.state;
-  const rows = [];
-  let probs = 0;
-  if (!st.approved) {
-    rows.push({ k: "", note: true, problem: true, v: "Approve the clip in step 5 first.",
-      fix: { label: "Open Review", onClick: () => openStep("stepReview") } });
-    probs++;
-  }
-  const pick = $("uAlpha").value;
-  if (st.approved && pick && pick !== "authored" && pick !== "distance" && !(st.mattes || {})[pick]) {
-    rows.push({ k: "", note: true, problem: true, v: "Matte not cut yet — run it in Review first.",
-      fix: { label: "Open Review", onClick: () => openStep("stepReview") } });
-    probs++;
-  }
-  if (pick === "authored") {
-    rows.push({ k: "", note: true, problem: true, v: "Authored coverage cannot be trained on — pick a matte in Review." });
-    probs++;
-  }
-  if (!S.health.brush) {
-    rows.push({ k: "", note: true, problem: true,
-      v: `Brush not found — set "brush" in config.json.` });
-    probs++;
-  }
-  if (num("sSteps", 50000) > 15000) {
-    rows.push({ k: "", live: true, note: true,
-      v: `${num("sSteps", 50000).toLocaleString()} steps is past the ~15,000 quality peak.`,
-      fix: { label: "Use 15,000", onClick: () => {
-        $("sSteps").value = "15000";
-        $("sSteps").dispatchEvent(new Event("input", { bubbles: true }));
-        fx.flash($("sSteps").closest(".f"));
-        logUi("training steps → 15,000"); repaint(); onDirty();
-      } } });
-  }
-  rows.push({ k: "dataset", v: "dataset/ — frames, mattes, COLMAP poses" });
-  rows.push({ k: "alpha", v: $("uAlpha").selectedOptions[0]?.textContent || "", from: "from step 5" });
-  rows.push({ k: "init cloud", v: "visual hull carved from the mattes" });
-  rows.push({ k: "output", v: `${st._dir || ""}\\splat_out` });
-  rows.push({ k: "checkpoints", v: ckList.length ? `${ckList.length} on disk` : "none yet" });
-  rows.push({ k: "steps", v: `${num("sSteps", 50000).toLocaleString()}` });
-  renderStatusFolded("stTrain", "Train", rows, "training setup");
-  gate("btnSplat", probs, "Build splat");
-  return probs;
-}
-
-async function refreshReport() {
-  let j;
-  try { j = await api(`/api/splat_report?project=${encodeURIComponent(S.project)}`,
-                      undefined, { quiet: true }); }
-  catch (e) { return; }
-  const runs = j.runs || [];
-  renderStatus("stReport", "Training runs", runs.length
-    ? runs.slice(-6).map(r => ({
-        k: r.when ? new Date(r.when * 1000).toLocaleString() : (r.name || "run"),
-        v: [r.steps ? `${r.steps} steps` : "", r.splats ? `${(+r.splats).toLocaleString()} splats` : "",
-            r.anisotropy ? `aniso ${(+r.anisotropy).toFixed(1)}` : "", r.detail || ""]
-             .filter(Boolean).join(" · ") || JSON.stringify(r).slice(0, 120) }))
-    : [{ k: "", v: "no runs recorded for this project" }]);
-}
 
 // ================================================================ repaint ===
 let repaintTimer = null;
@@ -789,7 +733,7 @@ export function repaintNow() {
     syncCanvas();
     seedCard();
     statusSource(); statusCloud(); statusShot(); softSync();
-    statusEngine(); statusGenerate(); statusReview(); statusTrain();
+    statusEngine(); statusGenerate(); statusReview();
     const l = lensMm();
     $("fovMmHint").textContent = l
       ? `≈ ${l.mm.toFixed(0)} mm full-frame (${lensLook(l.mm)}) · `
@@ -807,7 +751,6 @@ export function repaintNow() {
     $("vStepsVal").textContent = num("vSteps", 30);
     $("vGuideVal").textContent = (num("vGuide", 50) / 10).toFixed(1);
     $("cropCtl").classList.toggle("hidden", !$("cCropOn").checked);
-    $("rerunOpts").classList.toggle("hidden", !$("sRerun").checked);
     fx.syncAllRanges($("railAuthor"));
   } catch (e) { console.error("repaint", e); }
 }
@@ -1229,43 +1172,27 @@ async function generateFlow(btn) {
   await generate(btn);
 }
 
-async function trainSplat(datasetOnly, btn) {
-  const body = {
-    project: S.project, steps: num("sSteps", 50000), detail: $("sDetail").value,
-    sh_degree: num("sSH", 3), matte_source: $("uAlpha").value,
-    dataset_only: !!datasetOnly, clean: $("sClean").checked,
-    rerun: $("sRerun").checked, rerun_stats_every: num("sRrStats", 50),
-    rerun_splats_every: num("sRrSplats", 0),
-  };
-  if (btn) fx.btnBusy(btn, "Preparing…");
-  let plan;
-  try { plan = await api("/api/splat/plan", body); }
-  catch (e) { if (btn) fx.btnDone(btn, false, "Refused"); return; }
-  if (btn) fx.btnRestore(btn);
-  const total = num("sSteps", 50000);
-  apvShow(plan, {
-    title: datasetOnly ? "Build the COLMAP dataset only" : "Build the splat",
-    subtitle: `Brush: ${esc(plan.brush)}${plan.brush_found ? "" : " — NOT FOUND"}`,
-    goLabel: datasetOnly ? "Build the dataset" : "Approve & build",
-    settingsHtml: settingsHtml(plan.settings),
-    onApprove: () => runDetached(
-      datasetOnly ? "build the dataset" : "build the splat",
-      () => api("/api/splat", body), {
-        btn, stage: "splat", busy: "Starting…",
-        busyRunning: datasetOnly ? "Building…" : "Training…",
-        working: datasetOnly ? "Building the dataset" : "Building the splat",
-        ok: datasetOnly ? "Dataset built" : "Splat built",
-        okBtn: "Built",
-        detailFn: datasetOnly ? null : (st => {
-          const last = (S.splats.exports || []).slice(-1)[0];
-          if (!last || !last.step) return { detail: String(st.msg || "preparing the dataset…").slice(0, 110) };
-          return { detail: `Checkpoint at step ${(+last.step).toLocaleString()} of ${total.toLocaleString()}`,
-                   pct: Math.min(99, 100 * last.step / Math.max(total, 1)) };
-        }),
-      }),
+async function buildDataset(btn) {
+  // The dataset IS the deliverable now: frames, mattes, the authored poses and
+  // the init cloud, ready to open in Brush. Approval is a server-side gate on
+  // the same call, so it is done here rather than asked for separately.
+  if (!S.state.approved) {
+    try {
+      await api("/api/approve", { name: S.project });
+      await fireStateChange("approve");
+    } catch (e) { return; }
+  }
+  await runDetached("build the dataset", () => api("/api/splat", {
+    project: S.project, matte_source: $("uAlpha").value, dataset_only: true,
+  }), {
+    btn, stage: "splat", busy: "Building…", busyRunning: "Building…",
+    working: "Building the dataset", ok: "Dataset built", okBtn: "Built",
+    after: async () => {
+      await fireStateChange("dataset");
+      logUi(`dataset ready at ${S.state._dir}\\dataset — open that folder in Brush`);
+    },
   });
 }
-
 
 // ============================================================ checkpoints ===
 export async function refreshCheckpoints() {
@@ -1295,7 +1222,6 @@ export async function refreshCheckpoints() {
   if (splatView && have && $("ckSel").value !== ckLoaded) await loadCheckpoint();
   // The Train status counts these, and it was drawn before they arrived.
   if (prev !== ckList.map(x => x.name).join(",")) repaint();
-  await refreshReport();
 }
 
 async function loadCheckpoint() {
@@ -1646,26 +1572,8 @@ export function init() {
     } catch (err) { fx.btnDone(b, false, "Upload failed"); }
   };
   $("btnRetimeAdv").onclick = retime;
-  // Approve -> wait until the state really says approved -> tick -> Train.
-  $("btnApprove").onclick = async () => {
-    const b = $("btnApprove");
-    fx.btnBusy(b, "Approving…");
-    logUi("approve the clip — sent");
-    try {
-      await api("/api/approve", { name: S.project });
-      await fireStateChange("approve");
-      if (!S.state.approved) throw new Error("the approval did not land in the project state");
-      logUi(`approved ${S.state.ai_video} — the splat step may run`);
-      fx.btnDone(b, true, "Approved");
-      flashOutcome({ kind: "ok", title: "Clip approved", detail: `${S.state.ai_video} · opening Train` });
-      await fx.wait(550);
-      if (authorVisible()) openStep("stepTrain");
-    } catch (err) {
-      logUi(`approve failed: ${err.message}`, "error");
-      fx.btnDone(b, false, "Not approved");
-      flashOutcome({ kind: "fail", title: "Approval failed", detail: shortErr(err.message) });
-    }
-  };
+  $("btnDataset").onclick = () => buildDataset($("btnDataset"))
+    .catch(e => logUi(e.message, "error"));
   $("btnRetry").onclick = async () => {
     await run("reset the review stage", () => api("/api/reset_stage", { name: S.project }),
               { wait: false, busy: "Resetting…", okBtn: "Reset" }).catch(() => null);
@@ -1674,31 +1582,6 @@ export function init() {
     openStep("stepGen");
   };
 
-  // ---- train
-  $("btnSplat").onclick = () => trainSplat(false, $("btnSplat")).catch(e => logUi(e.message, "error"));
-  $("btnSplatUp").onclick = () => $("splatFile").click();
-  $("splatFile").onchange = async e => {
-    const f = e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    const b = $("btnSplatUp");
-    fx.btnBusy(b, "Uploading…");
-    try {
-      const j = await apiRaw(`/api/splat_upload?project=${encodeURIComponent(S.project)}`, f);
-      logUi(`uploaded ${S.state._dir}\\splat_out\\${j.name} — ${(+j.splats).toLocaleString()} splats, ${j.mb} MB`);
-      fx.btnDone(b, true, "Uploaded");
-      fx.toast(`${j.name} — ${(+j.splats).toLocaleString()} splats`, "ok");
-      await fireStateChange("splat_upload");
-    } catch (err) { fx.btnDone(b, false, "Upload failed"); }
-  };
-  $("btnRerunOpen").onclick = async () => {
-    try {
-      const j = await api("/api/rerun/open", {});
-      $("rerunHint").textContent = j.message;
-      logUi(`rerun: ${j.message}`);
-      fx.toast(j.message, "info");
-    } catch (err) { /* reported by api() */ }
-  };
   $("btnAbort").onclick = async () => {
     const b = $("btnAbort");
     fx.btnBusy(b, "Stopping…");
