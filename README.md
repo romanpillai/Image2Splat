@@ -37,9 +37,6 @@ splat, to generate more views and refine it.
 Every file the tool reads, writes or uploads is logged with its full path in the
 console at the bottom.
 
-The full story, with the dead ends, the measurements and the lessons, is in the
-write-up: **[One image in, a Gaussian splat out](blog-post/img2splat-one-image-to-gaussian-splat.md)**.
-
 ## Gallery
 
 ![Nine Gaussian splats, each made from a single photo and shown through one of its own COLMAP cameras](docs/media/gallery.jpg)
@@ -183,7 +180,6 @@ steps.py            geometry, rendering, depth, matting, datasets
 falclient.py        fal.ai engines and prompts
 web/                the browser app (plain ES modules, no build step)
 web/vendor/         three.js, PlayCanvas, GSAP
-blog-post/          the write-up and its screenshots
 docs/media/         the images in this README
 projects/           your work (created on first run, not committed)
 ```

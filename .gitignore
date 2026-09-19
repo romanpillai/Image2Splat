@@ -44,3 +44,6 @@ Thumbs.db
 
 # Brush trainer autotune cache, regenerated at runtime
 target/
+
+# The write-up stays local; it is not part of what this repository publishes.
+blog-post/
