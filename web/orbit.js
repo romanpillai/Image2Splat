@@ -152,7 +152,9 @@ function drawPanes() {
   const paneW = splitOn ? Math.floor(w / 2) : w;
   renderer.setViewport(0, 0, paneW, h);
   renderer.setScissor(0, 0, paneW, h);
+  if (cloudMat) cloudMat.uniforms.uClay.value = clayOn ? 1 : 0;
   renderer.render(scene, cam);
+  if (cloudMat) cloudMat.uniforms.uClay.value = 0;
 
   if (!splitOn) { renderer.setScissorTest(false); return; }
 
@@ -411,8 +413,10 @@ export function setCloudParams(p) {
   if (p.px !== undefined) cloudMat.uniforms.uPx.value = p.px;
 }
 
-/** Flat clay in the CAMERA pane only; the free view keeps photo colours so
- *  the subject can still be read while composing. */
+/** Flat clay in BOTH panes: the free view is where the cloud is composed, so
+ *  it should show what the control video will render, not a different look.
+ *  The viewport bar's "Camera: colour" toggle is the way to see the photo
+ *  colours while clay is on. */
 export function setClay(on) { clayOn = !!on; }
 export function hasCloud() { return !!cloudPts; }
 

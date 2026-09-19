@@ -15,7 +15,11 @@
 
   <nav class="wstabs" id="wsTabs">
     <button id="tabAuthor" class="on" data-ws="author">Author</button>
-    <button id="tabPasses" data-ws="passes">Passes</button>
+    <!-- The passes workspace is hidden: extra rings above and below the
+         authored orbit work in principle but are untested and incomplete.
+         Everything behind it is still here -- unhide this button to get it
+         back. -->
+    <button id="tabPasses" data-ws="passes" class="hidden">Passes</button>
   </nav>
 
   <div class="projwrap" style="position:relative">
@@ -91,6 +95,12 @@
             <option value="da2-large">Depth Anything V2 Large &mdash; relative, non-commercial</option>
             <option value="da3-metric">Depth Anything 3 Metric Large &mdash; metric</option>
             <option value="da3-mono">Depth Anything 3 Mono Large &mdash; relative</option>
+          </select></div>
+
+        <div class="f"><label for="oClay"><b>Look</b><small>the viewport and the control video</small></label>
+          <select id="oClay">
+            <option value="shaded" selected>flat clay &mdash; one neutral grey</option>
+            <option value="off">source colour</option>
           </select></div>
 
         <div class="f"><label for="oPoints"><b>Point density</b><small>points across the photo</small></label>
@@ -228,11 +238,6 @@
             <div class="f"><label for="oElevCycles"><b id="cyclesLabel">Sweep cycles</b></label>
               <input type="number" id="oElevCycles" step="0.5" value="1"></div>
 
-            <div class="f"><label for="oClay"><b>Look</b><small>what the control video shows</small></label>
-              <select id="oClay">
-                <option value="shaded" selected>flat clay &mdash; one neutral grey</option>
-                <option value="off">source colour</option>
-              </select></div>
 
             <!-- The card is a FIXED OBJECT IN THE WORLD: a photograph
                  unprojected at a physical size. Radius is the framing control.
@@ -398,7 +403,7 @@
       <div class="vpbar">
         <button id="fSplit" class="on" title="split: free view | the camera's view">Split</button>
         <button id="vCard" class="on" title="the flat source card">Card</button>
-        <button id="vClay" title="The camera view shows flat clay, exactly as the control video renders. Click to preview the photo colours.">Camera: clay</button>
+        <button id="vClay" title="The viewport shows flat clay, exactly as the control video renders. Click to preview the photo colours.">View: clay</button>
         <button id="gizBtn" title="cycle the gizmo">Gizmo: off</button>
         <select id="gizTarget" title="what the gizmo moves">
           <option value="subject">subject</option>

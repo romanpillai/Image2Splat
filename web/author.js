@@ -173,10 +173,10 @@ export function pushOrbit() {
   const vc = $("vClay");
   if (vc) {
     vc.classList.toggle("hidden", !clayOn);
-    vc.textContent = clayPreview ? "Camera: clay" : "Camera: colour";
+    vc.textContent = clayPreview ? "View: clay" : "View: colour";
     vc.title = clayPreview
-      ? "The camera view shows flat clay, exactly as the control video renders. Click to preview the photo colours."
-      : "The camera view shows photo colours; the control video still renders as clay. Click to go back to clay.";
+      ? "The viewport shows flat clay, exactly as the control video renders. Click to preview the photo colours."
+      : "The viewport shows photo colours; the control video still renders as clay. Click to go back to clay.";
   }
   orbit.setSubject(subjectParams());
   const c = cropSphere();
@@ -1482,7 +1482,7 @@ export function init() {
   });
   $("oClay").addEventListener("change", () => {
     pushOrbit();
-    logUi(`look → ${$("oClay").selectedOptions[0].textContent} (the camera view shows it now)`);
+    logUi(`look → ${$("oClay").selectedOptions[0].textContent} (the viewport shows it now)`);
   });
   $("btnOrbit").onclick = () => renderControl({ btn: $("btnOrbit") });
 
