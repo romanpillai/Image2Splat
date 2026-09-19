@@ -498,7 +498,6 @@ async function boot() {
       $("projList").value = S.project;
     }
   }
-  $("buildTag").textContent = S.health.build || "beta";
 
   // ---- shell wiring
   for (const b of document.querySelectorAll("#wsTabs button")) {

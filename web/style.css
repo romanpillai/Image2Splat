@@ -165,7 +165,6 @@ header{
 .brand{font:600 13px/19px var(--font-ui);letter-spacing:.02em;color:var(--fg-strong);
   white-space:nowrap}
 .brand b{color:var(--accent-text);font-weight:600}
-#buildTag{font:400 10px/14px var(--font-mono);color:var(--fg-dim)}
 
 .wstabs{display:flex;gap:0;border:1px solid var(--line)}
 .wstabs button{
