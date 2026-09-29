@@ -55,7 +55,7 @@ trained from it (20k steps), all through the same 120 cameras.
 - **NVIDIA GPU**, 12 GB of VRAM recommended, with a recent driver.
 - **Python 3.12**
 - **Git** (two packages install straight from GitHub)
-- **A fal.ai account and API key** -> https://fal.ai/dashboard/keys
+- **A fal.ai account and API key** -> https://fal.ai/dashboard/keys (I'm working on a version where it can work with LTX 2.3 locally)
 - **Brush**, the Gaussian splat trainer -> https://github.com/ArthurBrussee/brush/releases
 - Several GB of free disk space for Python packages and model downloads.
 
